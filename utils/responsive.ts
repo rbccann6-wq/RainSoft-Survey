@@ -1,4 +1,5 @@
 // Responsive utilities for web/mobile detection
+import React from 'react';
 import { Dimensions, Platform } from 'react-native';
 
 export const getDeviceType = () => {
@@ -53,5 +54,4 @@ export const useResponsive = () => {
   };
 };
 
-// React import for hook
-import React from 'react';
+
