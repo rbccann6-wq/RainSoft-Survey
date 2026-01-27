@@ -727,3 +727,146 @@ export const testSalesforceConnection = async () => {
     return { success: false, message: String(error) };
   }
 };
+
+// ============================================================
+// ADP INTEGRATION (Deno Deploy Bridge)
+// ============================================================
+
+// ADP Deno Deploy bridge URL - Update this with your deployed Deno URL
+export const ADP_BRIDGE_URL = 'YOUR_DENO_DEPLOY_URL_HERE'; // e.g., 'https://your-project.deno.dev'
+
+// Test ADP connection via Deno bridge
+export const testADPConnection = async () => {
+  if (!ADP_BRIDGE_URL || ADP_BRIDGE_URL === 'YOUR_DENO_DEPLOY_URL_HERE') {
+    return { 
+      success: false, 
+      message: 'ADP bridge URL not configured. Please update ADP_BRIDGE_URL in syncService.ts with your Deno Deploy URL' 
+    };
+  }
+
+  try {
+    const healthUrl = `${ADP_BRIDGE_URL}/health`;
+    
+    const response = await fetch(healthUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { 
+        success: false, 
+        message: `ADP bridge unreachable: ${response.status} - ${errorText}` 
+      };
+    }
+    
+    const healthData = await response.json();
+    
+    // Check if the bridge is properly configured
+    if (healthData.status === 'healthy') {
+      const config = healthData.configuration || {};
+      const isReady = config.adp_credentials && config.ssl_certificates && config.supabase_config;
+      
+      if (isReady) {
+        return { 
+          success: true, 
+          message: 'ADP bridge online and fully configured' 
+        };
+      } else {
+        const missing = [];
+        if (!config.adp_credentials) missing.push('ADP credentials');
+        if (!config.ssl_certificates) missing.push('SSL certificates');
+        if (!config.supabase_config) missing.push('Supabase config');
+        
+        return { 
+          success: false, 
+          message: `ADP bridge online but missing: ${missing.join(', ')}` 
+        };
+      }
+    } else {
+      return { 
+        success: false, 
+        message: `ADP bridge status: ${healthData.status || 'unknown'}` 
+      };
+    }
+  } catch (error) {
+    return { 
+      success: false, 
+      message: `Cannot connect to ADP bridge: ${String(error)}` 
+    };
+  }
+};
+
+// Manually trigger ADP sync for time entries
+export const syncTimeEntriesToADP = async () => {
+  if (!ADP_BRIDGE_URL || ADP_BRIDGE_URL === 'YOUR_DENO_DEPLOY_URL_HERE') {
+    throw new Error('ADP bridge URL not configured');
+  }
+
+  const online = await isOnline();
+  if (!online) {
+    throw new Error('No internet connection');
+  }
+
+  try {
+    const syncUrl = `${ADP_BRIDGE_URL}/sync/time-entries`;
+    const syncSecret = await StorageService.getData('adp_sync_secret'); // Store this securely
+    
+    const response = await fetch(syncUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': syncSecret ? `Bearer ${syncSecret}` : '',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ADP sync failed: ${response.status} - ${errorText}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('❌ ADP time entry sync error:', error);
+    throw error;
+  }
+};
+
+// Manually trigger ADP sync for employee onboarding
+export const syncEmployeesToADP = async () => {
+  if (!ADP_BRIDGE_URL || ADP_BRIDGE_URL === 'YOUR_DENO_DEPLOY_URL_HERE') {
+    throw new Error('ADP bridge URL not configured');
+  }
+
+  const online = await isOnline();
+  if (!online) {
+    throw new Error('No internet connection');
+  }
+
+  try {
+    const syncUrl = `${ADP_BRIDGE_URL}/sync/employees`;
+    const syncSecret = await StorageService.getData('adp_sync_secret');
+    
+    const response = await fetch(syncUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': syncSecret ? `Bearer ${syncSecret}` : '',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ADP sync failed: ${response.status} - ${errorText}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('❌ ADP employee sync error:', error);
+    throw error;
+  }
+};
