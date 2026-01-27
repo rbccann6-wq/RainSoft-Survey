@@ -733,7 +733,7 @@ export const testSalesforceConnection = async () => {
 // ============================================================
 
 // ADP Deno Deploy bridge URL - Update this with your deployed Deno URL
-export const ADP_BRIDGE_URL = 'YOUR_DENO_DEPLOY_URL_HERE'; // e.g., 'https://your-project.deno.dev'
+export const ADP_BRIDGE_URL = 'https://rainsoft-survey.rainsoft.deno.net';
 
 // Test ADP connection via Deno bridge
 export const testADPConnection = async () => {
