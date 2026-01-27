@@ -16,7 +16,6 @@
  * - SUPABASE_SERVICE_ROLE_KEY: Service role key for database access
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 // ============ CONFIGURATION ============
@@ -657,4 +656,7 @@ console.log("🚀 Deno ADP Sync Bridge starting...");
 console.log("📊 Ready to sync Onspace data to ADP Workforce Now");
 console.log("🔐 mTLS authentication enabled");
 
-serve(handler);
+// Deno Deploy uses the default export
+export default {
+  fetch: handler,
+};
