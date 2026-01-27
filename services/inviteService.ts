@@ -1,5 +1,8 @@
 // Service for sending employee invites via SMS and email
 import * as Notifications from 'expo-notifications';
+import { getSupabaseClient } from '@/template';
+
+const supabase = getSupabaseClient();
 
 export const sendEmployeeInvite = async (
   firstName: string,
@@ -17,7 +20,11 @@ export const sendEmployeeInvite = async (
     const message = `Welcome to RainSoft of the Wiregrass, ${firstName}! Click here to complete your onboarding: ${inviteLink}`;
     
     console.log(`📧 Email sent to: ${email}`);
-    console.log(`📱 SMS sent to: ${phone}`);
+    
+    // Send SMS via Twilio
+    console.log(`📱 Sending SMS to: ${phone}`);
+    await sendSMS(phone, message);
+    
     console.log(`Message: ${message}`);
     
     // Mock notification for demo
@@ -36,11 +43,29 @@ export const sendEmployeeInvite = async (
   }
 };
 
-// In production, integrate with Twilio for SMS and SendGrid/AWS SES for email
+// Send SMS via Twilio Edge Function
 export const sendSMS = async (phone: string, message: string): Promise<boolean> => {
-  // TODO: Integrate Twilio API
-  console.log(`SMS to ${phone}: ${message}`);
-  return true;
+  try {
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: { to: phone, message },
+    });
+
+    if (error) {
+      console.error('SMS Error:', error);
+      return false;
+    }
+
+    if (data?.success) {
+      console.log('✅ SMS sent successfully');
+      return true;
+    } else {
+      console.error('SMS failed:', data?.error);
+      return false;
+    }
+  } catch (error) {
+    console.error('Failed to send SMS:', error);
+    return false;
+  }
 };
 
 export const sendEmail = async (

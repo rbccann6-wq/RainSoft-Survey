@@ -4,6 +4,9 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { Employee, Alert, PushNotification, Message, Schedule } from '@/types';
 import * as StorageService from './storageService';
+import { getSupabaseClient } from '@/template';
+
+const supabase = getSupabaseClient();
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -82,25 +85,27 @@ export async function notifyManagers(
   await sendSMS(managers, body);
 }
 
-// Mock SMS service (replace with Twilio when backend is available)
+// Send SMS via Twilio Edge Function
 async function sendSMS(managers: Employee[], message: string): Promise<void> {
-  console.log('📱 SMS would be sent to managers:');
-  managers.forEach(manager => {
-    console.log(`  → ${manager.firstName} ${manager.lastName} (${manager.phone}): ${message}`);
-  });
+  console.log('📱 Sending SMS to managers:');
   
-  // TODO: Integrate with Twilio when OnSpace Cloud is enabled
-  // Example implementation:
-  /*
-  const twilioResponse = await fetch('YOUR_EDGE_FUNCTION_URL/send-sms', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      recipients: managers.map(m => m.phone),
-      message,
-    }),
-  });
-  */
+  for (const manager of managers) {
+    if (manager.phone) {
+      try {
+        const { data, error } = await supabase.functions.invoke('send-sms', {
+          body: { to: manager.phone, message },
+        });
+
+        if (error) {
+          console.error(`Failed to send SMS to ${manager.firstName}:`, error);
+        } else if (data?.success) {
+          console.log(`  ✅ ${manager.firstName} ${manager.lastName} (${manager.phone})`);
+        }
+      } catch (error) {
+        console.error(`Error sending SMS to ${manager.firstName}:`, error);
+      }
+    }
+  }
 }
 
 // ============================================================
