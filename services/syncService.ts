@@ -698,6 +698,67 @@ export const testWebhookConnection = async () => {
   }
 };
 
+// ============================================================
+// TEST INTEGRATIONS
+// ============================================================
+
+// Test Twilio SMS connection
+export const testTwilioConnection = async () => {
+  try {
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
+    
+    // Send a test SMS to verify Twilio is working
+    const testPhone = '+15555555555'; // Test phone number
+    const testMessage = 'RainSoft Survey App - Twilio Connection Test';
+    
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: { to: testPhone, message: testMessage },
+    });
+    
+    if (error) {
+      return { success: false, message: `Twilio Error: ${error.message || String(error)}` };
+    }
+    
+    if (data?.success) {
+      return { success: true, message: 'Twilio SMS service connected and ready' };
+    } else {
+      return { success: false, message: data?.error || 'Unknown Twilio error' };
+    }
+  } catch (error) {
+    return { success: false, message: String(error) };
+  }
+};
+
+// Test SendGrid email connection
+export const testSendGridConnection = async () => {
+  try {
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
+    
+    // Send a test email to verify SendGrid is working
+    const testEmail = 'test@example.com'; // Test email
+    const testSubject = 'RainSoft Survey App - Email Connection Test';
+    const testBody = 'This is a test email from your RainSoft Survey App to verify SendGrid integration is working correctly.';
+    
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: { to: testEmail, subject: testSubject, body: testBody },
+    });
+    
+    if (error) {
+      return { success: false, message: `SendGrid Error: ${error.message || String(error)}` };
+    }
+    
+    if (data?.success) {
+      return { success: true, message: 'SendGrid email service connected and ready' };
+    } else {
+      return { success: false, message: data?.error || 'Unknown SendGrid error' };
+    }
+  } catch (error) {
+    return { success: false, message: String(error) };
+  }
+};
+
 // Test Salesforce connection
 export const testSalesforceConnection = async () => {
   try {

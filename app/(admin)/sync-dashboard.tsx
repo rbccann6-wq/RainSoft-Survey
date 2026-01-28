@@ -39,6 +39,8 @@ export default function SyncDashboardScreen() {
     salesforce: null as boolean | null,
     zapier: null as boolean | null,
     adp: null as boolean | null,
+    twilio: null as boolean | null,
+    sendgrid: null as boolean | null,
   });
   const [refreshing, setRefreshing] = useState(false);
   const [creatingTestSurvey, setCreatingTestSurvey] = useState(false);
@@ -95,26 +97,42 @@ export default function SyncDashboardScreen() {
     }
 
     setTestingConnections(true);
-    setConnectionStatus({ salesforce: null, zapier: null, adp: null });
+    setConnectionStatus({ salesforce: null, zapier: null, adp: null, twilio: null, sendgrid: null });
 
-    // Test Salesforce
-    const sfResult = await SyncService.testSalesforceConnection();
-    setConnectionStatus(prev => ({ ...prev, salesforce: sfResult.success }));
+    // Test all integrations in parallel
+    const [sfResult, zapResult, adpResult, twilioResult, sendGridResult] = await Promise.all([
+      SyncService.testSalesforceConnection(),
+      SyncService.testWebhookConnection(),
+      SyncService.testADPConnection(),
+      SyncService.testTwilioConnection(),
+      SyncService.testSendGridConnection(),
+    ]);
 
-    // Test Zapier
-    const zapResult = await SyncService.testWebhookConnection();
-    setConnectionStatus(prev => ({ ...prev, zapier: zapResult.success }));
-
-    // Test ADP
-    const adpResult = await SyncService.testADPConnection();
-    setConnectionStatus(prev => ({ ...prev, adp: adpResult.success }));
+    // Update connection status
+    setConnectionStatus({
+      salesforce: sfResult.success,
+      zapier: zapResult.success,
+      adp: adpResult.success,
+      twilio: twilioResult.success,
+      sendgrid: sendGridResult.success,
+    });
 
     setTestingConnections(false);
 
-    const allSuccess = sfResult.success && zapResult.success && adpResult.success;
+    const allSuccess = sfResult.success && zapResult.success && adpResult.success && twilioResult.success && sendGridResult.success;
+    const failedIntegrations = [
+      !sfResult.success && `Salesforce: ${sfResult.message}`,
+      !zapResult.success && `Zapier: ${zapResult.message}`,
+      !adpResult.success && `ADP: ${adpResult.message}`,
+      !twilioResult.success && `Twilio SMS: ${twilioResult.message}`,
+      !sendGridResult.success && `SendGrid Email: ${sendGridResult.message}`,
+    ].filter(Boolean);
+
     showAlert(
-      allSuccess ? 'All Connections OK ✓' : 'Connection Issues',
-      `Salesforce: ${sfResult.success ? '✓' : '✗ ' + sfResult.message}\nZapier: ${zapResult.success ? '✓' : '✗ ' + zapResult.message}\nADP: ${adpResult.success ? '✓' : '✗ ' + adpResult.message}`
+      allSuccess ? '✅ All Connections OK' : '⚠️ Connection Issues',
+      allSuccess
+        ? 'All integrations are connected and working properly:\n\n✓ Salesforce\n✓ Zapier\n✓ ADP\n✓ Twilio SMS\n✓ SendGrid Email'
+        : `Some integrations failed:\n\n${failedIntegrations.join('\n\n')}`
     );
   };
 
@@ -362,9 +380,9 @@ export default function SyncDashboardScreen() {
         </View>
 
         {/* Connection Status */}
-        {(connectionStatus.salesforce !== null || connectionStatus.zapier !== null || connectionStatus.adp !== null) && (
+        {(connectionStatus.salesforce !== null || connectionStatus.zapier !== null || connectionStatus.adp !== null || connectionStatus.twilio !== null || connectionStatus.sendgrid !== null) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Connection Status</Text>
+            <Text style={styles.sectionTitle}>Integration Status</Text>
             <View style={styles.connectionList}>
               {connectionStatus.salesforce !== null && (
                 <View style={styles.connectionItem}>
@@ -373,12 +391,15 @@ export default function SyncDashboardScreen() {
                     size={24}
                     color={connectionStatus.salesforce ? LOWES_THEME.success : LOWES_THEME.error}
                   />
-                  <Text style={styles.connectionName}>Salesforce</Text>
+                  <View style={styles.connectionInfo}>
+                    <Text style={styles.connectionName}>Salesforce</Text>
+                    <Text style={styles.connectionDescription}>Lead/Contact sync</Text>
+                  </View>
                   <Text style={[
                     styles.connectionStatus,
                     { color: connectionStatus.salesforce ? LOWES_THEME.success : LOWES_THEME.error },
                   ]}>
-                    {connectionStatus.salesforce ? 'Connected' : 'Failed'}
+                    {connectionStatus.salesforce ? '✓ OK' : '✗ Failed'}
                   </Text>
                 </View>
               )}
@@ -390,12 +411,15 @@ export default function SyncDashboardScreen() {
                     size={24}
                     color={connectionStatus.zapier ? LOWES_THEME.success : LOWES_THEME.error}
                   />
-                  <Text style={styles.connectionName}>Zapier</Text>
+                  <View style={styles.connectionInfo}>
+                    <Text style={styles.connectionName}>Zapier</Text>
+                    <Text style={styles.connectionDescription}>Appointment webhook</Text>
+                  </View>
                   <Text style={[
                     styles.connectionStatus,
                     { color: connectionStatus.zapier ? LOWES_THEME.success : LOWES_THEME.error },
                   ]}>
-                    {connectionStatus.zapier ? 'Connected' : 'Failed'}
+                    {connectionStatus.zapier ? '✓ OK' : '✗ Failed'}
                   </Text>
                 </View>
               )}
@@ -407,12 +431,55 @@ export default function SyncDashboardScreen() {
                     size={24}
                     color={connectionStatus.adp ? LOWES_THEME.success : LOWES_THEME.error}
                   />
-                  <Text style={styles.connectionName}>ADP</Text>
+                  <View style={styles.connectionInfo}>
+                    <Text style={styles.connectionName}>ADP Workforce</Text>
+                    <Text style={styles.connectionDescription}>Time & employee sync</Text>
+                  </View>
                   <Text style={[
                     styles.connectionStatus,
                     { color: connectionStatus.adp ? LOWES_THEME.success : LOWES_THEME.error },
                   ]}>
-                    {connectionStatus.adp ? 'Connected' : 'Failed'}
+                    {connectionStatus.adp ? '✓ OK' : '✗ Failed'}
+                  </Text>
+                </View>
+              )}
+
+              {connectionStatus.twilio !== null && (
+                <View style={styles.connectionItem}>
+                  <MaterialIcons
+                    name={connectionStatus.twilio ? 'check-circle' : 'error'}
+                    size={24}
+                    color={connectionStatus.twilio ? LOWES_THEME.success : LOWES_THEME.error}
+                  />
+                  <View style={styles.connectionInfo}>
+                    <Text style={styles.connectionName}>Twilio SMS</Text>
+                    <Text style={styles.connectionDescription}>Text message notifications</Text>
+                  </View>
+                  <Text style={[
+                    styles.connectionStatus,
+                    { color: connectionStatus.twilio ? LOWES_THEME.success : LOWES_THEME.error },
+                  ]}>
+                    {connectionStatus.twilio ? '✓ OK' : '✗ Failed'}
+                  </Text>
+                </View>
+              )}
+
+              {connectionStatus.sendgrid !== null && (
+                <View style={styles.connectionItem}>
+                  <MaterialIcons
+                    name={connectionStatus.sendgrid ? 'check-circle' : 'error'}
+                    size={24}
+                    color={connectionStatus.sendgrid ? LOWES_THEME.success : LOWES_THEME.error}
+                  />
+                  <View style={styles.connectionInfo}>
+                    <Text style={styles.connectionName}>SendGrid Email</Text>
+                    <Text style={styles.connectionDescription}>Employee invitations</Text>
+                  </View>
+                  <Text style={[
+                    styles.connectionStatus,
+                    { color: connectionStatus.sendgrid ? LOWES_THEME.success : LOWES_THEME.error },
+                  ]}>
+                    {connectionStatus.sendgrid ? '✓ OK' : '✗ Failed'}
                   </Text>
                 </View>
               )}
@@ -856,11 +923,18 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: 8,
   },
-  connectionName: {
+  connectionInfo: {
     flex: 1,
+  },
+  connectionName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
     color: LOWES_THEME.text,
+  },
+  connectionDescription: {
+    fontSize: FONTS.sizes.xs,
+    color: LOWES_THEME.textSubtle,
+    marginTop: 2,
   },
   connectionStatus: {
     fontSize: FONTS.sizes.sm,
