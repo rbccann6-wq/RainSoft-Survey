@@ -27,6 +27,7 @@ export default function AppointmentScreen() {
   const addressInputRef = useRef<any>();
   
   const [address, setAddress] = useState('');
+  const [email, setEmail] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
   const [selectedTime, setSelectedTime] = useState('');
@@ -53,8 +54,15 @@ export default function AppointmentScreen() {
   }
 
   const handleSubmit = async () => {
-    if (!address || !selectedDate || !selectedTime) {
-      showAlert('Required Fields', 'Please fill in address, date, and time');
+    if (!address || !email || !selectedDate || !selectedTime) {
+      showAlert('Required Fields', 'Please fill in address, email, date, and time');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      showAlert('Invalid Email', 'Please enter a valid email address');
       return;
     }
 
@@ -67,6 +75,7 @@ export default function AppointmentScreen() {
         date: selectedDate.toISOString().split('T')[0],
         time: selectedTime,
         notes,
+        email,
       };
 
       const completeSurvey: Survey = {
@@ -192,7 +201,7 @@ export default function AppointmentScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Google Places Autocomplete */}
         <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.text }]}>Street Address</Text>
+          <Text style={[styles.inputLabel, { color: theme.text }]}>Street Address *</Text>
           <GooglePlacesAutocomplete
             ref={addressInputRef}
             placeholder="123 Main St, City, State, Zip"
@@ -243,6 +252,19 @@ export default function AppointmentScreen() {
               value: address,
               onChangeText: setAddress,
             }}
+          />
+        </View>
+
+        {/* Email Input */}
+        <View style={styles.inputGroup}>
+          <Input
+            label="Email Address *"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="customer@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            borderColor={theme.primary}
           />
         </View>
 
@@ -381,7 +403,7 @@ export default function AppointmentScreen() {
           backgroundColor={theme.primary}
           size="large"
           fullWidth
-          disabled={!address || !selectedDate || !selectedTime || isSubmitting}
+          disabled={!address || !email || !selectedDate || !selectedTime || isSubmitting}
         />
 
         {/* Small Skip Button */}

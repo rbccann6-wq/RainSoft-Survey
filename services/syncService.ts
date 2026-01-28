@@ -1,3 +1,4 @@
+
 // Sync service for Salesforce and Zapier integration
 import NetInfo from '@react-native-community/netinfo';
 import { Survey, TimeEntry, Appointment } from '@/types';
@@ -308,7 +309,7 @@ export const syncToSalesforce = async (
     console.log('🔄 Starting Salesforce sync for survey:', survey.id);
     
     // Check for duplicates if phone number exists
-    const phone = formatPhoneNumber(survey.answers.phone || '');
+    const phone = formatPhoneNumber(survey.answers.contact_info?.phone || ''); // Corrected line
     if (phone) {
       const duplicateCheck = await checkSalesforceDuplicate(phone);
       if (duplicateCheck.isDuplicate) {
@@ -395,11 +396,12 @@ export const sendToZapier = async (data: {
       // Contact information
       first_name: data.survey.answers.contact_info?.firstName || '',
       last_name: data.survey.answers.contact_info?.lastName || '',
-      phone: data.survey.answers.phone || '',
+      phone: data.survey.answers.contact_info?.phone || '', // Corrected line
+      email: data.appointment.email || '',
       address: data.appointment.address,
       city: data.survey.answers.contact_info?.city || '',
       state: data.survey.answers.contact_info?.state || '',
-      zip_code: data.survey.answers.contact_info?.zipCode || '',
+      zip_code: data.survey.answers.contact_info?.zipCode || '', // Corrected line
       
       // Appointment details
       appointment_date: data.appointment.date,
@@ -525,7 +527,7 @@ export const processSyncQueue = async (
                 recordType: result.duplicateInfo!.recordType,
                 salesforceId: result.duplicateInfo!.salesforceId,
                 salesforceUrl: `${SALESFORCE_CONFIG.instanceUrl}/lightning/r/${result.duplicateInfo!.recordType}/${result.duplicateInfo!.salesforceId}/view`,
-                matchedPhone: survey.answers.phone || '',
+                matchedPhone: survey.answers.contact_info?.phone || '',
                 recordName: result.duplicateInfo!.recordName,
                 recordEmail: result.duplicateInfo!.recordEmail,
               };
