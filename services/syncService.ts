@@ -235,13 +235,21 @@ const checkSalesforceDuplicate = async (
   try {
     const { getSupabaseClient } = require('@/template');
     const supabase = getSupabaseClient();
+    const { FunctionsHttpError } = require('@supabase/supabase-js');
     
     const { data, error } = await supabase.functions.invoke('salesforce-sync', {
       body: { action: 'check_duplicate', data: { phone } },
     });
     
     if (error) {
-      console.warn('⚠️ Duplicate check error:', error);
+      let errorMessage = error.message || String(error);
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const textContent = await error.context?.text();
+          errorMessage = textContent || error.message || 'Unknown error';
+        } catch {}
+      }
+      console.warn('⚠️ Duplicate check error:', errorMessage);
       return { isDuplicate: false };
     }
     
@@ -259,13 +267,21 @@ export const verifySalesforceRecord = async (
   try {
     const { getSupabaseClient } = require('@/template');
     const supabase = getSupabaseClient();
+    const { FunctionsHttpError } = require('@supabase/supabase-js');
     
     const { data, error } = await supabase.functions.invoke('salesforce-sync', {
       body: { action: 'verify_record', data: { recordId } },
     });
     
     if (error) {
-      return { exists: false, error: String(error) };
+      let errorMessage = error.message || String(error);
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const textContent = await error.context?.text();
+          errorMessage = textContent || error.message || 'Unknown error';
+        } catch {}
+      }
+      return { exists: false, error: errorMessage };
     }
     
     return data;
@@ -316,13 +332,21 @@ export const syncToSalesforce = async (
     // Create Lead via Edge Function
     const { getSupabaseClient } = require('@/template');
     const supabase = getSupabaseClient();
+    const { FunctionsHttpError } = require('@supabase/supabase-js');
     
     const { data, error } = await supabase.functions.invoke('salesforce-sync', {
       body: { action: 'create_lead', data: { leadData } },
     });
     
     if (error) {
-      throw new Error(`Salesforce sync failed: ${error.message || String(error)}`);
+      let errorMessage = error.message || String(error);
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const textContent = await error.context?.text();
+          errorMessage = textContent || error.message || 'Unknown error';
+        } catch {}
+      }
+      throw new Error(`Salesforce sync failed: ${errorMessage}`);
     }
     
     if (!data.success) {
@@ -723,13 +747,21 @@ export const deleteSalesforceRecord = async (
     
     const { getSupabaseClient } = require('@/template');
     const supabase = getSupabaseClient();
+    const { FunctionsHttpError } = require('@supabase/supabase-js');
     
     const { data, error } = await supabase.functions.invoke('salesforce-sync', {
       body: { action: 'delete_record', data: { recordId, recordType } },
     });
     
     if (error) {
-      return { success: false, error: String(error) };
+      let errorMessage = error.message || String(error);
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const textContent = await error.context?.text();
+          errorMessage = textContent || error.message || 'Unknown error';
+        } catch {}
+      }
+      return { success: false, error: errorMessage };
     }
     
     console.log(`✅ ${recordType} deleted successfully`);
@@ -841,13 +873,24 @@ export const testSalesforceConnection = async () => {
   try {
     const { getSupabaseClient } = require('@/template');
     const supabase = getSupabaseClient();
+    const { FunctionsHttpError } = require('@supabase/supabase-js');
     
     const { data, error } = await supabase.functions.invoke('salesforce-sync', {
       body: { action: 'test_connection' },
     });
     
     if (error) {
-      return { success: false, message: String(error) };
+      let errorMessage = error.message || String(error);
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const statusCode = error.context?.status ?? 500;
+          const textContent = await error.context?.text();
+          errorMessage = `[Code: ${statusCode}] ${textContent || error.message || 'Unknown error'}`;
+        } catch {
+          errorMessage = `${error.message || 'Failed to read response'}`;
+        }
+      }
+      return { success: false, message: errorMessage };
     }
     
     return data;
