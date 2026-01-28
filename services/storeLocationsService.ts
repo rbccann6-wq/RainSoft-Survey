@@ -16,68 +16,275 @@ export interface StoreLocation {
   };
 }
 
-// Store locations database - Add your actual store locations here
-// This is a sample database - replace with your actual store locations
+// Store locations database - RainSoft survey coverage area
 export const STORE_LOCATIONS: StoreLocation[] = [
-  // Home Depot Stores
+  // ==================== LOWES STORES ====================
+  
+  // Alabama
+  {
+    id: 'lowes-0281',
+    storeName: 'LOWES 0281',
+    storeNumber: '0281',
+    storeType: 'Lowes',
+    address: '1301 Boll Weevil Cir',
+    city: 'Enterprise',
+    state: 'AL',
+    zipCode: '',
+    coordinates: {
+      latitude: 31.3323,
+      longitude: -85.8608,
+    },
+  },
+  
+  // Florida - Panhandle Region
+  {
+    id: 'lowes-1782',
+    storeName: 'LOWES 1782',
+    storeNumber: '1782',
+    storeType: 'Lowes',
+    address: '298 Rasberry Rd',
+    city: 'Crestview',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.7275,
+      longitude: -86.5744,
+    },
+  },
+  {
+    id: 'lowes-2886',
+    storeName: 'LOWES 2886',
+    storeNumber: '2886',
+    storeType: 'Lowes',
+    address: '135 Business Park Rd',
+    city: 'DeFuniak Springs',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.6200,
+      longitude: -86.1470,
+    },
+  },
+  {
+    id: 'lowes-0448',
+    storeName: 'LOWES 0448',
+    storeNumber: '0448',
+    storeType: 'Lowes',
+    address: '300 E 23rd St',
+    city: 'Panama City',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.1879,
+      longitude: -85.6553,
+    },
+  },
+  {
+    id: 'lowes-2367',
+    storeName: 'LOWES 2367',
+    storeNumber: '2367',
+    storeType: 'Lowes',
+    address: '11751 Panama City Beach Pkwy',
+    city: 'Panama City Beach',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.1983,
+      longitude: -85.8203,
+    },
+  },
+  {
+    id: 'lowes-3166',
+    storeName: 'LOWES 3166',
+    storeNumber: '3166',
+    storeType: 'Lowes',
+    address: '4405 Legendary Dr',
+    city: 'Destin',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.3918,
+      longitude: -86.4199,
+    },
+  },
+  
+  // Pensacola Metro Area
+  {
+    id: 'lowes-0438',
+    storeName: 'LOWES 0438',
+    storeNumber: '0438',
+    storeType: 'Lowes',
+    address: '1201 Airport Blvd',
+    city: 'Pensacola',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.48,
+      longitude: -87.21,
+    },
+  },
+  {
+    id: 'lowes-2788',
+    storeName: 'LOWES 2788',
+    storeNumber: '2788',
+    storeType: 'Lowes',
+    address: '777 W Nine Mile Rd',
+    city: 'Pensacola',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.531,
+      longitude: -87.285,
+    },
+  },
+  {
+    id: 'lowes-1142',
+    storeName: 'LOWES 1142',
+    storeNumber: '1142',
+    storeType: 'Lowes',
+    address: '4301 W Fairfield Dr',
+    city: 'Pensacola',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.4345,
+      longitude: -87.2791,
+    },
+  },
+  
+  // ==================== HOME DEPOT STORES ====================
+  
+  // Alabama
   {
     id: 'hd-0808',
     storeName: 'HOME DEPOT 0808',
     storeNumber: '0808',
     storeType: 'Home Depot',
-    address: '1234 Main St',
-    city: 'Atlanta',
-    state: 'GA',
-    zipCode: '30303',
+    address: '3489 Ross Clark Cir',
+    city: 'Dothan',
+    state: 'AL',
+    zipCode: '',
     coordinates: {
-      latitude: 33.7490,
-      longitude: -84.3880,
+      latitude: 31.2474,
+      longitude: -85.4292,
     },
   },
+  
+  // Florida - Panhandle Region
   {
-    id: 'hd-0809',
-    storeName: 'HOME DEPOT 0809',
-    storeNumber: '0809',
+    id: 'hd-6303',
+    storeName: 'HOME DEPOT 6303',
+    storeNumber: '6303',
     storeType: 'Home Depot',
-    address: '5678 Oak Ave',
-    city: 'Atlanta',
-    state: 'GA',
-    zipCode: '30305',
+    address: '409 E 23rd St',
+    city: 'Panama City',
+    state: 'FL',
+    zipCode: '',
     coordinates: {
-      latitude: 33.7890,
-      longitude: -84.3680,
-    },
-  },
-  // Lowes Stores
-  {
-    id: 'lowes-1234',
-    storeName: 'LOWES 1234',
-    storeNumber: '1234',
-    storeType: 'Lowes',
-    address: '9012 Peachtree Rd',
-    city: 'Atlanta',
-    state: 'GA',
-    zipCode: '30308',
-    coordinates: {
-      latitude: 33.7690,
-      longitude: -84.3780,
+      latitude: 30.1913,
+      longitude: -85.6543,
     },
   },
   {
-    id: 'lowes-1235',
-    storeName: 'LOWES 1235',
-    storeNumber: '1235',
-    storeType: 'Lowes',
-    address: '3456 Pine St',
-    city: 'Atlanta',
-    state: 'GA',
-    zipCode: '30310',
+    id: 'hd-8446',
+    storeName: 'HOME DEPOT 8446',
+    storeNumber: '8446',
+    storeType: 'Home Depot',
+    address: '11500 Panama City Beach Pkwy',
+    city: 'Panama City Beach',
+    state: 'FL',
+    zipCode: '',
     coordinates: {
-      latitude: 33.7290,
-      longitude: -84.4080,
+      latitude: 30.1985,
+      longitude: -85.8125,
     },
   },
-  // Add more store locations as needed
+  {
+    id: 'hd-6377',
+    storeName: 'HOME DEPOT 6377',
+    storeNumber: '6377',
+    storeType: 'Home Depot',
+    address: '4385 Commons Dr W',
+    city: 'Destin',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.3889,
+      longitude: -86.4410,
+    },
+  },
+  {
+    id: 'hd-6301',
+    storeName: 'HOME DEPOT 6301',
+    storeNumber: '6301',
+    storeType: 'Home Depot',
+    address: '414B Mary Esther Blvd NW',
+    city: 'Fort Walton Beach',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.4236,
+      longitude: -86.6422,
+    },
+  },
+  
+  // Pensacola Metro Area
+  {
+    id: 'hd-8472',
+    storeName: 'HOME DEPOT 8472',
+    storeNumber: '8472',
+    storeType: 'Home Depot',
+    address: '541 W Nine Mile Rd',
+    city: 'Pensacola',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.5300,
+      longitude: -87.2850,
+    },
+  },
+  {
+    id: 'hd-6853',
+    storeName: 'HOME DEPOT 6853',
+    storeNumber: '6853',
+    storeType: 'Home Depot',
+    address: '5309 N Davis Hwy',
+    city: 'Pensacola',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.4753,
+      longitude: -87.2280,
+    },
+  },
+  {
+    id: 'hd-6932',
+    storeName: 'HOME DEPOT 6932',
+    storeNumber: '6932',
+    storeType: 'Home Depot',
+    address: '4525 Mobile Hwy',
+    city: 'Pensacola',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.4345,
+      longitude: -87.2791,
+    },
+  },
+  {
+    id: 'hd-6368',
+    storeName: 'HOME DEPOT 6368',
+    storeNumber: '6368',
+    storeType: 'Home Depot',
+    address: '4829 US-90',
+    city: 'Pace',
+    state: 'FL',
+    zipCode: '',
+    coordinates: {
+      latitude: 30.6015,
+      longitude: -87.1226,
+    },
+  },
 ];
 
 /**
