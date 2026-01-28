@@ -34,15 +34,7 @@ export default function ActivityMonitorScreen() {
         ActivityService.getInactivityLogs(20),
       ]);
       
-      // CRITICAL FIX: If no inactive users found via activity service, fall back to checking surveys
-      // This handles the case where employees are clocked in but haven't used the kiosk app
-      if (inactive.length === 0) {
-        const fallbackInactive = await checkInactivityBySurveys(selectedThreshold);
-        setInactiveUsers(fallbackInactive);
-      } else {
-        setInactiveUsers(inactive);
-      }
-      
+      setInactiveUsers(inactive);
       setInactivityLogs(logs);
     } catch (error) {
       console.error('Error loading activity data:', error);
@@ -51,72 +43,6 @@ export default function ActivityMonitorScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-  
-  // Fallback: Check inactivity based on time since last survey/clock in
-  const checkInactivityBySurveys = async (thresholdMinutes: number): Promise<ActivityService.InactiveUser[]> => {
-    const { getSupabaseClient } = require('@/template');
-    const supabase = getSupabaseClient();
-    
-    // Get all active time entries
-    const { data: activeEntries, error } = await supabase
-      .from('time_entries')
-      .select(`
-        id,
-        employee_id,
-        store,
-        clock_in,
-        employees!inner(id, first_name, last_name)
-      `)
-      .is('clock_out', null);
-    
-    if (error || !activeEntries || activeEntries.length === 0) {
-      return [];
-    }
-    
-    const { getSurveys } = require('@/services/storageService');
-    const allSurveys = await getSurveys();
-    const today = new Date().toISOString().split('T')[0];
-    const now = Date.now();
-    const inactiveUsers: ActivityService.InactiveUser[] = [];
-    
-    for (const entry of activeEntries) {
-      // Find employee's surveys today
-      const employeeSurveysToday = allSurveys.filter(s => 
-        s.employeeId === entry.employee_id && 
-        s.timestamp.startsWith(today)
-      );
-      
-      // Get last activity time
-      let lastActivityTime: number;
-      let lastActivityAt: string;
-      if (employeeSurveysToday.length > 0) {
-        const lastSurvey = employeeSurveysToday.sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        )[0];
-        lastActivityTime = new Date(lastSurvey.timestamp).getTime();
-        lastActivityAt = lastSurvey.timestamp;
-      } else {
-        lastActivityTime = new Date(entry.clock_in).getTime();
-        lastActivityAt = entry.clock_in;
-      }
-      
-      const inactiveMinutes = Math.floor((now - lastActivityTime) / (1000 * 60));
-      
-      if (inactiveMinutes >= thresholdMinutes) {
-        inactiveUsers.push({
-          employeeId: entry.employee_id,
-          employeeName: `${(entry.employees as any).first_name} ${(entry.employees as any).last_name}`,
-          timeEntryId: entry.id,
-          lastActivityAt,
-          inactiveDurationMinutes: inactiveMinutes,
-          currentPage: employeeSurveysToday.length === 0 ? 'No surveys today' : undefined,
-          store: entry.store,
-        });
-      }
-    }
-    
-    return inactiveUsers;
   };
 
   const handleRefresh = () => {

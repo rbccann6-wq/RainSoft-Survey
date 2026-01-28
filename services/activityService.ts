@@ -31,118 +31,106 @@ export interface InactivitySettings {
   enabled: boolean;
 }
 
-// HEARTBEAT TRACKING: Detects inactivity based on 5 consecutive missed checks (5 minutes)
-const HEARTBEAT_INTERVAL = 60000; // 60 seconds
-const INACTIVITY_THRESHOLD = 5; // 5 consecutive misses = 5 minutes
-const heartbeatTracking = new Map<string, { lastHeartbeat: number; missedChecks: number }>();
+// ============================================================
+// SIMPLIFIED INACTIVITY DETECTION - ONE SOURCE OF TRUTH
+// Uses last survey time as the reliable indicator of activity
+// ============================================================
 
-// Log activity event to database
-export const logActivity = async (event: ActivityEvent): Promise<void> => {
+// SIMPLIFIED & RELIABLE: Check for inactive clocked-in users based on last survey time
+export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5): Promise<InactiveUser[]> => {
   try {
-    const { error } = await supabase
-      .from('user_activity')
-      .insert([{
-        employee_id: event.employeeId,
-        time_entry_id: event.timeEntryId,
-        event_type: event.eventType,
-        page_path: event.pagePath,
-        is_page_visible: event.isPageVisible,
-        metadata: event.metadata,
-      }]);
+    const { getSurveys } = require('@/services/storageService');
+    
+    // Get all active time entries (clocked in, not clocked out)
+    const { data: activeEntries, error: entriesError } = await supabase
+      .from('time_entries')
+      .select(`
+        id,
+        employee_id,
+        store,
+        clock_in,
+        employees!inner(id, first_name, last_name)
+      `)
+      .is('clock_out', null);
 
-    if (error) {
-      console.error('Failed to log activity:', error);
+    if (entriesError || !activeEntries || activeEntries.length === 0) {
+      return [];
     }
-    
-    // Update heartbeat tracking
-    recordHeartbeat(event.employeeId);
-  } catch (error) {
-    console.error('Error logging activity:', error);
-  }
-};
 
-// Record heartbeat for an employee (called when activity is logged)
-const recordHeartbeat = (employeeId: string): void => {
-  heartbeatTracking.set(employeeId, {
-    lastHeartbeat: Date.now(),
-    missedChecks: 0,
-  });
-};
+    const allSurveys = await getSurveys();
+    const today = new Date().toISOString().split('T')[0];
+    const now = Date.now();
+    const inactiveUsers: InactiveUser[] = [];
 
-// Check heartbeat status (called every 60 seconds)
-export const checkHeartbeats = async (): Promise<void> => {
-  const now = Date.now();
-  const employees = Array.from(heartbeatTracking.entries());
-  
-  for (const [employeeId, tracking] of employees) {
-    const timeSinceLastHeartbeat = now - tracking.lastHeartbeat;
-    
-    // If more than 60 seconds since last heartbeat, increment missed checks
-    if (timeSinceLastHeartbeat > HEARTBEAT_INTERVAL) {
-      tracking.missedChecks++;
+    // Check each clocked-in employee
+    for (const entry of activeEntries) {
+      // Find employee's surveys today
+      const employeeSurveysToday = allSurveys.filter(s => 
+        s.employeeId === entry.employee_id && 
+        s.timestamp.startsWith(today)
+      );
       
-      // If 5 consecutive misses (5 minutes), mark as inactive
-      if (tracking.missedChecks >= INACTIVITY_THRESHOLD) {
-        console.log(`⚠️ Employee ${employeeId} inactive for ${tracking.missedChecks} minutes`);
-        // Keep tracking but don't increment further until they become active again
+      // Determine last activity time
+      let lastActivityTime: number;
+      let lastActivityAt: string;
+      
+      if (employeeSurveysToday.length > 0) {
+        // Use last survey time as last activity
+        const lastSurvey = employeeSurveysToday.sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )[0];
+        lastActivityTime = new Date(lastSurvey.timestamp).getTime();
+        lastActivityAt = lastSurvey.timestamp;
+      } else {
+        // No surveys - use clock in time as last activity
+        lastActivityTime = new Date(entry.clock_in).getTime();
+        lastActivityAt = entry.clock_in;
+      }
+      
+      // Calculate inactivity duration in minutes
+      const inactiveDuration = Math.floor((now - lastActivityTime) / (1000 * 60));
+      
+      // Check if employee is inactive based on threshold
+      if (inactiveDuration >= inactivityThresholdMinutes) {
+        inactiveUsers.push({
+          employeeId: entry.employee_id,
+          employeeName: `${(entry.employees as any).first_name} ${(entry.employees as any).last_name}`,
+          timeEntryId: entry.id,
+          lastActivityAt,
+          inactiveDurationMinutes: inactiveDuration,
+          currentPage: employeeSurveysToday.length === 0 ? 'No surveys today' : undefined,
+          store: entry.store,
+        });
       }
     }
-  }
-};
 
-// Get employees who have missed 5+ heartbeats
-export const getInactiveEmployeesByHeartbeat = (): string[] => {
-  const inactive: string[] = [];
-  
-  for (const [employeeId, tracking] of heartbeatTracking.entries()) {
-    if (tracking.missedChecks >= INACTIVITY_THRESHOLD) {
-      inactive.push(employeeId);
-    }
-  }
-  
-  return inactive;
-};
-
-// Start heartbeat monitoring (call this once when app starts)
-let heartbeatInterval: NodeJS.Timeout | null = null;
-
-export const startHeartbeatMonitoring = (): void => {
-  if (heartbeatInterval) {
-    console.log('⚠️ Heartbeat monitoring already running');
-    return;
-  }
-  
-  console.log('🫀 Starting heartbeat monitoring (checks every 60s, 5 consecutive misses = inactive)');
-  
-  heartbeatInterval = setInterval(() => {
-    checkHeartbeats();
-  }, HEARTBEAT_INTERVAL);
-};
-
-export const stopHeartbeatMonitoring = (): void => {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval);
-    heartbeatInterval = null;
-    console.log('⏹️ Heartbeat monitoring stopped');
+    return inactiveUsers;
+  } catch (error) {
+    console.error('Error checking inactive users:', error);
+    return [];
   }
 };
 
 // Get last activity for an employee
 export const getLastActivity = async (employeeId: string): Promise<Date | null> => {
   try {
-    const { data, error } = await supabase
-      .from('user_activity')
-      .select('created_at')
-      .eq('employee_id', employeeId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error || !data) {
-      return null;
+    const { getSurveys } = require('@/services/storageService');
+    const allSurveys = await getSurveys();
+    const today = new Date().toISOString().split('T')[0];
+    
+    const employeeSurveysToday = allSurveys.filter(s => 
+      s.employeeId === employeeId && 
+      s.timestamp.startsWith(today)
+    );
+    
+    if (employeeSurveysToday.length > 0) {
+      const lastSurvey = employeeSurveysToday.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0];
+      return new Date(lastSurvey.timestamp);
     }
-
-    return new Date(data.created_at);
+    
+    return null;
   } catch (error) {
     console.error('Error getting last activity:', error);
     return null;
@@ -162,116 +150,6 @@ export const getInactivitySettings = async (): Promise<InactivitySettings> => {
 // Save inactivity settings
 export const saveInactivitySettings = async (settings: InactivitySettings): Promise<void> => {
   await StorageService.saveData('inactivity_alert_settings', settings);
-};
-
-// Check for inactive clocked-in users (admin only) - Enhanced with heartbeat integration
-export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5): Promise<InactiveUser[]> => {
-  try {
-    // Get all active time entries (clocked in, not clocked out)
-    const { data: activeEntries, error: entriesError } = await supabase
-      .from('time_entries')
-      .select(`
-        id,
-        employee_id,
-        store,
-        clock_in,
-        is_active_in_kiosk,
-        employees!inner(id, first_name, last_name)
-      `)
-      .is('clock_out', null);
-
-    if (entriesError || !activeEntries || activeEntries.length === 0) {
-      return [];
-    }
-
-    const inactiveUsers: InactiveUser[] = [];
-    const now = new Date();
-
-    // Check each clocked-in employee's last activity
-    for (const entry of activeEntries) {
-      // Get last activity
-      const { data: lastActivity, error: activityError } = await supabase
-        .from('user_activity')
-        .select('created_at, page_path, event_type, metadata')
-        .eq('employee_id', entry.employee_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (activityError || !lastActivity) {
-        // No activity recorded - assume inactive since clock in
-        const clockInTime = new Date(entry.clock_in);
-        const inactiveDuration = Math.floor((now.getTime() - clockInTime.getTime()) / (1000 * 60));
-
-        if (inactiveDuration >= inactivityThresholdMinutes) {
-          inactiveUsers.push({
-            employeeId: entry.employee_id,
-            employeeName: `${(entry.employees as any).first_name} ${(entry.employees as any).last_name}`,
-            timeEntryId: entry.id,
-            lastActivityAt: entry.clock_in,
-            inactiveDurationMinutes: inactiveDuration,
-            currentPage: undefined,
-            store: entry.store,
-          });
-        }
-        continue;
-      }
-
-      const lastActivityTime = new Date(lastActivity.created_at);
-      const inactiveDuration = Math.floor((now.getTime() - lastActivityTime.getTime()) / (1000 * 60));
-
-      // Check if user is inactive based on:
-      // 1. Not on kiosk survey page for 5+ minutes
-      // 2. OR on kiosk survey page but no survey progress (no question changes) for 5+ minutes
-      // NEW LOGIC: Check heartbeat first (5 consecutive missed checks = inactive)
-      const heartbeatStatus = heartbeatTracking.get(entry.employee_id);
-      const isInactiveByHeartbeat = heartbeatStatus && heartbeatStatus.missedChecks >= INACTIVITY_THRESHOLD;
-      
-      const isOnSurveyPage = lastActivity.page_path === '/kiosk/survey';
-      const hasRecentProgress = lastActivity.event_type === 'survey_page_changed' && 
-                                lastActivity.metadata?.surveyProgress === true;
-
-      let shouldMarkInactive = false;
-      let inactivityReason = '';
-      
-      // Priority 1: Heartbeat detection (most reliable - based on app activity)
-      if (isInactiveByHeartbeat) {
-        shouldMarkInactive = true;
-        inactivityReason = 'No heartbeat activity for 5+ minutes';
-      }
-      // Priority 2: Traditional checks (fallback if heartbeat not available)
-      else if (!isOnSurveyPage && inactiveDuration >= inactivityThresholdMinutes) {
-        // Not on survey page and inactive for threshold
-        shouldMarkInactive = true;
-        inactivityReason = 'Not on survey kiosk page';
-      } else if (isOnSurveyPage && !hasRecentProgress && inactiveDuration >= inactivityThresholdMinutes) {
-        // On survey page but no progress (stuck on same question)
-        shouldMarkInactive = true;
-        inactivityReason = 'No survey progress';
-      } else if (entry.is_active_in_kiosk === false) {
-        // Manually marked as inactive
-        shouldMarkInactive = true;
-        inactivityReason = 'Marked inactive by system';
-      }
-
-      if (shouldMarkInactive) {
-        inactiveUsers.push({
-          employeeId: entry.employee_id,
-          employeeName: `${(entry.employees as any).first_name} ${(entry.employees as any).last_name}`,
-          timeEntryId: entry.id,
-          lastActivityAt: lastActivity.created_at,
-          inactiveDurationMinutes: inactiveDuration,
-          currentPage: lastActivity.page_path,
-          store: entry.store,
-        });
-      }
-    }
-
-    return inactiveUsers;
-  } catch (error) {
-    console.error('Error checking inactive users:', error);
-    return [];
-  }
 };
 
 // Log inactivity detection
@@ -421,7 +299,7 @@ const checkAndSendInactivityAlerts = async (): Promise<void> => {
     const settings = await getInactivitySettings();
     if (!settings.enabled) return;
     
-    // Get all inactive users (using enhanced heartbeat detection)
+    // Get all inactive users (using simplified detection)
     const inactiveUsers = await checkInactiveUsers(5); // 5 min threshold for detection
     
     if (inactiveUsers.length === 0) {
@@ -549,3 +427,31 @@ const sendInactivitySMSEscalation = async (
     }
   }
 };
+
+// Log activity event to database (kept for backward compatibility, but not used for inactivity detection)
+export const logActivity = async (event: ActivityEvent): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('user_activity')
+      .insert([{
+        employee_id: event.employeeId,
+        time_entry_id: event.timeEntryId,
+        event_type: event.eventType,
+        page_path: event.pagePath,
+        is_page_visible: event.isPageVisible,
+        metadata: event.metadata,
+      }]);
+
+    if (error) {
+      console.error('Failed to log activity:', error);
+    }
+  } catch (error) {
+    console.error('Error logging activity:', error);
+  }
+};
+
+// REMOVED: Heartbeat tracking - Not reliable, causes confusion
+// REMOVED: checkHeartbeats - Not needed with simplified detection
+// REMOVED: startHeartbeatMonitoring - Not needed
+// REMOVED: stopHeartbeatMonitoring - Not needed
+// REMOVED: getInactiveEmployeesByHeartbeat - Not needed
