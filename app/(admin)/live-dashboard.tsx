@@ -16,10 +16,12 @@ interface EmployeeStatus {
     surveys: number;
     appointments: number;
   };
+  isInactive: boolean;
+  inactiveMinutes: number;
 }
 
 export default function LiveDashboard() {
-  const { getClockedInEmployees } = useApp();
+  const { getClockedInEmployees, surveys } = useApp();
   const [clockedInEmployees, setClockedInEmployees] = useState<EmployeeStatus[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -33,7 +35,43 @@ export default function LiveDashboard() {
 
   const loadClockedInEmployees = async () => {
     const employees = await getClockedInEmployees();
-    setClockedInEmployees(employees);
+    
+    // Enhanced: Check for actual inactivity based on last survey/activity
+    const now = Date.now();
+    const inactivityThreshold = 15 * 60 * 1000; // 15 minutes
+    
+    const enhancedEmployees = employees.map(emp => {
+      // Find employee's surveys today
+      const today = new Date().toISOString().split('T')[0];
+      const employeeSurveysToday = surveys.filter(s => 
+        s.employeeId === emp.employee.id && 
+        s.timestamp.startsWith(today)
+      );
+      
+      // Get last activity time
+      let lastActivityTime: number;
+      if (employeeSurveysToday.length > 0) {
+        // Use last survey time as last activity
+        const lastSurvey = employeeSurveysToday.sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )[0];
+        lastActivityTime = new Date(lastSurvey.timestamp).getTime();
+      } else {
+        // Use clock in time if no surveys
+        lastActivityTime = new Date(emp.timeEntry.clockIn).getTime();
+      }
+      
+      const inactiveMinutes = Math.floor((now - lastActivityTime) / (1000 * 60));
+      const isInactive = (now - lastActivityTime) > inactivityThreshold;
+      
+      return {
+        ...emp,
+        isInactive,
+        inactiveMinutes,
+      };
+    });
+    
+    setClockedInEmployees(enhancedEmployees);
   };
 
   const handleRefresh = async () => {
@@ -93,14 +131,14 @@ export default function LiveDashboard() {
             style={[
               styles.tableStatusBadge,
               {
-                backgroundColor: item.timeEntry.isActiveInKiosk
-                  ? '#4CAF50'
-                  : '#FF9800',
+                backgroundColor: item.isInactive
+                  ? '#FF9800'
+                  : '#4CAF50',
               },
             ]}
           >
             <Text style={styles.tableStatusText}>
-              {item.timeEntry.isActiveInKiosk ? 'ACTIVE' : 'INACTIVE'}
+              {item.isInactive ? `INACTIVE ${item.inactiveMinutes}m` : 'ACTIVE'}
             </Text>
           </View>
         ),
@@ -219,7 +257,7 @@ export default function LiveDashboard() {
             </Text>
           </View>
         ) : (
-          clockedInEmployees.map(({ employee, timeEntry, todayStats }) => {
+          clockedInEmployees.map(({ employee, timeEntry, todayStats, isInactive, inactiveMinutes }) => {
             const surveysPerHour = getSurveysPerHour(todayStats, timeEntry.clockIn);
             const performanceColor = getPerformanceColor(surveysPerHour);
             const qualifiedSurveys = todayStats.surveys + todayStats.appointments;
@@ -245,19 +283,19 @@ export default function LiveDashboard() {
                     style={[
                       styles.statusBadge,
                       {
-                        backgroundColor: timeEntry.isActiveInKiosk
-                          ? '#4CAF50'
-                          : '#FF9800',
+                        backgroundColor: isInactive
+                          ? '#FF9800'
+                          : '#4CAF50',
                       },
                     ]}
                   >
                     <MaterialIcons
-                      name={timeEntry.isActiveInKiosk ? 'check-circle' : 'pause-circle-outline'}
+                      name={isInactive ? 'pause-circle-outline' : 'check-circle'}
                       size={16}
                       color="#FFFFFF"
                     />
                     <Text style={styles.statusText}>
-                      {timeEntry.isActiveInKiosk ? 'ACTIVE' : 'INACTIVE'}
+                      {isInactive ? `INACTIVE ${inactiveMinutes}m` : 'ACTIVE'}
                     </Text>
                   </View>
                 </View>
