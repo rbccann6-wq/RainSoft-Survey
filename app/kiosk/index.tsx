@@ -43,6 +43,8 @@ export default function KioskHome() {
   React.useEffect(() => {
     if (currentUser && activeTimeEntry) {
       const ActivityService = require('@/services/activityService');
+      
+      // Log initial page view
       ActivityService.logActivity({
         employeeId: currentUser.id,
         timeEntryId: activeTimeEntry.id,
@@ -51,6 +53,20 @@ export default function KioskHome() {
         isPageVisible: true,
         metadata: { page: 'kiosk_home' },
       });
+      
+      // Set up heartbeat interval (every 30 seconds while on this page)
+      const heartbeatInterval = setInterval(() => {
+        ActivityService.logActivity({
+          employeeId: currentUser.id,
+          timeEntryId: activeTimeEntry.id,
+          eventType: 'app_heartbeat',
+          pagePath: '/kiosk',
+          isPageVisible: true,
+          metadata: { page: 'kiosk_home', heartbeat: true },
+        });
+      }, 30000);
+      
+      return () => clearInterval(heartbeatInterval);
     }
   }, [currentUser, activeTimeEntry]);
 
@@ -635,7 +651,9 @@ export default function KioskHome() {
             style={styles.utilityButton}
             onPress={async () => {
               // Mark schedule as checked
-              await StorageService.saveData('last_schedule_check_' + currentUser!.id, new Date().toISOString());
+              if (currentUser) {
+                await StorageService.saveData('last_schedule_check_' + currentUser.id, new Date().toISOString());
+              }
               setScheduleUpdateCount(0);
               router.push('/kiosk/schedule');
             }}

@@ -118,10 +118,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Start background sync
     SyncService.startBackgroundSync();
     
+    // START INACTIVITY MONITORING SERVICES
+    const ActivityService = require('@/services/activityService');
+    
+    // Start heartbeat monitoring (checks every 60s, 5 consecutive misses = inactive)
+    ActivityService.startHeartbeatMonitoring();
+    
+    // Start automatic inactivity alerts (push at 15min, SMS at 30min by default)
+    ActivityService.startInactivityAlerts().catch(console.error);
+    
+    console.log('✅ Inactivity monitoring services started');
+    
     return () => {
       clearInterval(intervalId);
       unsubscribe();
       SyncService.stopBackgroundSync();
+      
+      // Stop monitoring services
+      ActivityService.stopHeartbeatMonitoring();
+      ActivityService.stopInactivityAlerts();
     };
   }, []);
 

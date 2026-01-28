@@ -104,6 +104,13 @@ export default function AdminDashboard() {
           color: '#9C27B0',
           description: 'Team communication',
         },
+        {
+          icon: 'visibility',
+          label: 'Activity Monitor',
+          route: '/(admin)/activity-monitor',
+          color: '#FF5722',
+          description: 'Track employee activity',
+        },
       ],
     },
     {
@@ -185,11 +192,11 @@ export default function AdminDashboard() {
           description: 'Push & SMS preferences',
         },
         {
-          icon: 'visibility',
-          label: 'Activity Monitor',
-          route: '/(admin)/activity-monitor',
-          color: '#FF9800',
-          description: 'Track employee activity',
+          icon: 'timer-off',
+          label: 'Inactivity Alerts',
+          route: '/(admin)/inactivity-settings',
+          color: '#FF5722',
+          description: 'Auto push & SMS alerts',
         },
         {
           icon: 'settings',

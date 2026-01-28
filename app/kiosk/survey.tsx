@@ -54,17 +54,32 @@ export default function SurveyScreen() {
     loadActiveEntry();
   }, [currentUser]);
 
-  // Track page visibility for heartbeats
+  // Heartbeat tracking - Send heartbeats every 30 seconds while on survey page
   React.useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsPageVisible(!document.hidden);
-    };
-
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    if (!currentUser || !activeTimeEntryId) {
+      return;
     }
-  }, []);
+    
+    // Set up heartbeat interval (every 30 seconds)
+    const heartbeatInterval = setInterval(() => {
+      if (isPageVisible) {
+        ActivityService.logActivity({
+          employeeId: currentUser.id,
+          timeEntryId: activeTimeEntryId,
+          eventType: 'app_heartbeat',
+          pagePath: '/kiosk/survey',
+          isPageVisible: true,
+          metadata: {
+            currentQuestion: currentQuestionIndex + 1,
+            hasAnswers: Object.keys(answers).length > 0,
+            heartbeat: true,
+          },
+        });
+      }
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(heartbeatInterval);
+  }, [currentUser, activeTimeEntryId, isPageVisible, currentQuestionIndex, answers]);
 
   // Inactivity detection - mark inactive if no survey progress in 5 minutes
   React.useEffect(() => {
