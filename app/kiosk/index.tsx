@@ -14,6 +14,21 @@ import { SPACING, FONTS, LOWES_THEME, HOMEDEPOT_THEME, getTheme, isTablet } from
 import { Store } from '@/constants/theme';
 import * as StorageService from '@/services/storageService';
 
+// Format date/time to 12-hour format with AM/PM
+const formatDateTime12Hour = (dateString: string): string => {
+  const date = new Date(dateString);
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const year = date.getFullYear();
+  
+  return `${month}/${day}/${year} ${displayHours}:${minutes} ${ampm}`;
+};
+
 export default function KioskHome() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
