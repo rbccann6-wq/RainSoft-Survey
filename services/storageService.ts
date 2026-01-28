@@ -592,15 +592,26 @@ export const saveMessages = async (messages: Message[]): Promise<void> => {
 };
 
 export const addMessage = async (message: Message): Promise<void> => {
-  const dbMessage = transformMessageToDB(message);
+  try {
+    const dbMessage = transformMessageToDB(message);
+    console.log('💾 Inserting message to database:', { id: message.id, content: message.content.substring(0, 30) });
 
-  const { error } = await supabase
-    .from('messages')
-    .insert([dbMessage]);
+    const { error } = await supabase
+      .from('messages')
+      .insert([dbMessage]);
 
-  if (error) {
-    console.error('Error adding message:', error);
-    throw error;
+    if (error) {
+      console.error('❌ Supabase error adding message:', error);
+      throw new Error(`Database error: ${error.message || 'Failed to insert message'}`);
+    }
+    
+    console.log('✅ Message successfully inserted to database');
+  } catch (error) {
+    console.error('❌ Exception in addMessage:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Unknown error occurred while adding message');
   }
 };
 
@@ -1342,15 +1353,20 @@ function transformMessageFromDB(data: any): Message {
 }
 
 function transformMessageToDB(message: Message): any {
+  // Validate required fields
+  if (!message.id || !message.senderId || !message.senderName || !message.content) {
+    throw new Error('Missing required message fields');
+  }
+  
   return {
     id: message.id,
     sender_id: message.senderId,
     sender_name: message.senderName,
-    recipient_ids: message.recipientIds,
+    recipient_ids: message.recipientIds || [],
     content: message.content,
-    is_group_message: message.isGroupMessage,
-    read_by: message.readBy,
-    reactions: message.reactions,
+    is_group_message: message.isGroupMessage || false,
+    read_by: message.readBy || [],
+    reactions: message.reactions || {},
   };
 }
 
