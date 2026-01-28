@@ -1,6 +1,6 @@
 // Modern iPhone Messages-style UI for employee messaging
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard, ScrollView, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,6 +19,8 @@ export default function MessagesScreen() {
   const [messageText, setMessageText] = useState('');
   const [showCompose, setShowCompose] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [showReadReceipts, setShowReadReceipts] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const myMessages = messages.filter(m => 
@@ -349,6 +351,10 @@ export default function MessagesScreen() {
               const showTimestamp = !prevMsg || 
                 new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
 
+              const totalRecipients = msg.isGroupMessage ? employees.filter(e => e.status === 'active').length : msg.recipientIds.length;
+              const readCount = msg.readBy.filter(id => id !== msg.senderId).length;
+              const isRead = !msg.isGroupMessage && msg.recipientIds.length > 0 && msg.readBy.includes(msg.recipientIds[0]);
+              
               return (
                 <View>
                   {showTimestamp && (
@@ -374,6 +380,38 @@ export default function MessagesScreen() {
                       ]}>
                         {msg.content}
                       </Text>
+                      
+                      {/* Read Receipts */}
+                      {isMe && (
+                        <View style={styles.readReceiptContainer}>
+                          {msg.isGroupMessage ? (
+                            <Pressable 
+                              onPress={() => {
+                                setSelectedMessage(msg);
+                                setShowReadReceipts(true);
+                              }}
+                              style={styles.groupReadReceipt}
+                            >
+                              <MaterialIcons 
+                                name="done-all" 
+                                size={14} 
+                                color={readCount > 0 ? '#34C759' : 'rgba(255,255,255,0.6)'}
+                              />
+                              <Text style={styles.readReceiptText}>
+                                Read by {readCount}/{totalRecipients}
+                              </Text>
+                            </Pressable>
+                          ) : (
+                            <View style={styles.individualReadReceipt}>
+                              <MaterialIcons 
+                                name={isRead ? 'done-all' : 'done'}
+                                size={14} 
+                                color={isRead ? '#34C759' : 'rgba(255,255,255,0.6)'}
+                              />
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -447,8 +485,107 @@ export default function MessagesScreen() {
     new Date(b!.timestamp).getTime() - new Date(a!.timestamp).getTime()
   );
 
+  // Read Receipts Modal
+  const renderReadReceiptsModal = () => {
+    if (!selectedMessage || !selectedMessage.isGroupMessage) return null;
+    
+    const allEmployees = employees.filter(e => e.status === 'active' && e.id !== selectedMessage.senderId);
+    const readEmployees = allEmployees.filter(emp => selectedMessage.readBy.includes(emp.id));
+    const unreadEmployees = allEmployees.filter(emp => !selectedMessage.readBy.includes(emp.id));
+    
+    return (
+      <Modal
+        visible={showReadReceipts}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReadReceipts(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={styles.modalBackdrop} 
+            onPress={() => setShowReadReceipts(false)}
+          />
+          
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Read Receipts</Text>
+              <Pressable 
+                onPress={() => setShowReadReceipts(false)}
+                style={styles.modalCloseButton}
+              >
+                <MaterialIcons name="close" size={24} color="#000" />
+              </Pressable>
+            </View>
+            
+            <ScrollView style={styles.modalScroll}>
+              {/* Read Section */}
+              {readEmployees.length > 0 && (
+                <View style={styles.receiptSection}>
+                  <View style={styles.receiptSectionHeader}>
+                    <MaterialIcons name="done-all" size={20} color="#34C759" />
+                    <Text style={styles.receiptSectionTitle}>
+                      Read ({readEmployees.length})
+                    </Text>
+                  </View>
+                  
+                  {readEmployees.map(emp => (
+                    <View key={emp.id} style={styles.receiptRow}>
+                      <View style={styles.receiptAvatar}>
+                        <Text style={styles.receiptAvatarText}>
+                          {emp.firstName[0]}{emp.lastName[0]}
+                        </Text>
+                      </View>
+                      <View style={styles.receiptInfo}>
+                        <Text style={styles.receiptName}>
+                          {emp.firstName} {emp.lastName}
+                        </Text>
+                        <Text style={styles.receiptRole}>{emp.role}</Text>
+                      </View>
+                      <MaterialIcons name="check-circle" size={20} color="#34C759" />
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {/* Unread Section */}
+              {unreadEmployees.length > 0 && (
+                <View style={styles.receiptSection}>
+                  <View style={styles.receiptSectionHeader}>
+                    <MaterialIcons name="schedule" size={20} color="#8E8E93" />
+                    <Text style={styles.receiptSectionTitle}>
+                      Not Read Yet ({unreadEmployees.length})
+                    </Text>
+                  </View>
+                  
+                  {unreadEmployees.map(emp => (
+                    <View key={emp.id} style={styles.receiptRow}>
+                      <View style={[styles.receiptAvatar, styles.receiptAvatarUnread]}>
+                        <Text style={styles.receiptAvatarText}>
+                          {emp.firstName[0]}{emp.lastName[0]}
+                        </Text>
+                      </View>
+                      <View style={styles.receiptInfo}>
+                        <Text style={styles.receiptName}>
+                          {emp.firstName} {emp.lastName}
+                        </Text>
+                        <Text style={styles.receiptRole}>{emp.role}</Text>
+                      </View>
+                      <MaterialIcons name="schedule" size={20} color="#8E8E93" />
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {renderReadReceiptsModal()}
       {/* iPhone-style Header */}
       <View style={styles.listHeader}>
         <Pressable 
@@ -864,6 +1001,118 @@ const styles = StyleSheet.create({
   },
   theirMessageText: {
     color: '#000000',
+  },
+  
+  // Read Receipts Styles
+  readReceiptContainer: {
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  groupReadReceipt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  readReceiptText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  individualReadReceipt: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#C6C6C8',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  modalCloseButton: {
+    padding: SPACING.xs,
+  },
+  modalScroll: {
+    maxHeight: 500,
+  },
+  receiptSection: {
+    paddingVertical: SPACING.md,
+  },
+  receiptSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: '#F2F2F7',
+  },
+  receiptSectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    gap: SPACING.md,
+  },
+  receiptAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  receiptAvatarUnread: {
+    backgroundColor: '#8E8E93',
+  },
+  receiptAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  receiptInfo: {
+    flex: 1,
+  },
+  receiptName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  receiptRole: {
+    fontSize: 13,
+    color: '#8E8E93',
+    textTransform: 'capitalize',
   },
   
   // Input Bar Styles
