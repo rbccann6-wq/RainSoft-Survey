@@ -76,6 +76,8 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Twilio API error:', response.status, errorText);
+      
+      // Return 200 with error details (Edge Function succeeded, Twilio failed)
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -83,7 +85,7 @@ Deno.serve(async (req) => {
           details: errorText
         }),
         { 
-          status: response.status, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );

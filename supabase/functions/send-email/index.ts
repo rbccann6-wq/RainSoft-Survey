@@ -72,13 +72,15 @@ Deno.serve(async (req) => {
       const errorText = await response.text();
       console.error('SendGrid Error:', response.status, errorText);
       
+      // Return 200 with error details (Edge Function succeeded, SendGrid failed)
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `SendGrid: Failed to send email (${response.status})` 
+          error: `SendGrid: Failed to send email (${response.status})`,
+          details: errorText
         }),
         { 
-          status: 500, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
