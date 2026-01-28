@@ -61,6 +61,13 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
     required: true,
   },
   {
+    id: 'people_in_home',
+    question: 'How many people in your home use the water on a daily basis?',
+    type: 'choice',
+    options: ['1-2', '3-4', '5-6', '7+'],
+    required: true,
+  },
+  {
     id: 'property_type',
     question: 'What type of property do you live in?',
     type: 'choice',
