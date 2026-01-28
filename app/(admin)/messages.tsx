@@ -357,20 +357,12 @@ export default function AdminMessagesScreen() {
               />
               
               <Pressable
-                onPress={() => {
-                  if (messageText.trim()) {
-                    sendMessage();
-                  }
-                }}
-                style={[
-                  styles.sendButton,
-                  !messageText.trim() && styles.sendButtonDisabled
-                ]}
-                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                onPress={sendMessage}
+                style={styles.sendButton}
               >
                 <MaterialIcons 
                   name="arrow-upward" 
-                  size={20} 
+                  size={24} 
                   color="#FFFFFF" 
                 />
               </Pressable>
@@ -779,20 +771,13 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 8 : 4,
   },
   sendButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: SPACING.sm,
-    marginBottom: 2,
-    minHeight: 44, // Ensure minimum touch target
-    minWidth: 44,
-  },
-  sendButtonDisabled: {
-    opacity: 0.4,
-    backgroundColor: '#C7C7CC',
   },
   cancelButton: {
     paddingHorizontal: SPACING.sm,
