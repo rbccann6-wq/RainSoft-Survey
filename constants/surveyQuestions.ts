@@ -9,7 +9,8 @@ export type QuestionType =
   | 'datetime'
   | 'address'
   | 'contact'
-  | 'number';
+  | 'number'
+  | 'multiselect';
 
 export interface SurveyQuestion {
   id: string;
@@ -20,6 +21,7 @@ export interface SurveyQuestion {
   note?: string;
   allowNext?: boolean;
   placeholder?: string;
+  multiSelect?: boolean;
 }
 
 export const SURVEY_QUESTIONS: SurveyQuestion[] = [
@@ -57,8 +59,9 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   },
   {
     id: 'tastes_odors',
-    question: 'Do you notice any bad tastes or odors in your tap water?',
-    type: 'yesno',
+    question: 'Do you experience any of the following with your tap water? (Select all that apply)',
+    type: 'multiselect',
+    options: ['Tastes', 'Odors', 'None'],
     required: true,
   },
   {

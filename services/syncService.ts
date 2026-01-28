@@ -133,8 +133,10 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
   const recordTypeId = isLowes ? '012Rl000007imrJIAQ' : '01236000001QBdgAAG';
   const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
   
-  // Map tastes/odors answer to backend format
-  const tastesOdorsValue = answers.tastes_odors === 'Yes' ? 'tastes, odors' : 'no problems';
+  // Map tastes/odors answer to multipicklist format (array of strings)
+  const tastesOdorsArray = Array.isArray(answers.tastes_odors) ? answers.tastes_odors : [];
+  // Filter out "None" and join remaining values with semicolons for Salesforce multipicklist
+  const tastesOdorsValue = tastesOdorsArray.filter(v => v !== 'None').join(';') || 'None';
   
   // Map filters answer to backend format
   const filtersValue = answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
@@ -157,6 +159,7 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
       Water_Source__c: answers.water_source,
       Property_Type__c: answers.property_type,
       People_In_Home__c: answers.people_in_home || 0,
+      Tastes_Odors__c: tastesOdorsValue,
       Survey_Store__c: isLowes ? 'Lowes' : 'Home Depot',
       Survey_Date__c: survey.timestamp,
       Survey_Employee_ID__c: survey.employeeId,
@@ -199,9 +202,10 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
       // Map survey answer fields
       let value = getNestedValue(answers, surveyField);
       
-      // Special handling for tastes_odors field
+      // Special handling for tastes_odors field (multipicklist)
       if (surveyField === 'tastes_odors') {
-        value = value === 'Yes' ? 'tastes, odors' : 'no problems';
+        const tastesOdorsArray = Array.isArray(value) ? value : [];
+        value = tastesOdorsArray.filter((v: string) => v !== 'None').join(';') || 'None';
       }
       
       // Special handling for uses_filters field
@@ -396,8 +400,9 @@ export const sendToZapier = async (data: {
     const leadSource = isLowes ? 'Lowes' : 'HDS';
     const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
     
-    // Format tastes/odors for Zapier
-    const tastesOdorsForZapier = data.survey.answers.tastes_odors === 'Yes' ? 'Yes - Tastes, Odors' : 'No - No Problems';
+    // Format tastes/odors for Zapier (multipicklist as comma-separated string)
+    const tastesOdorsArray = Array.isArray(data.survey.answers.tastes_odors) ? data.survey.answers.tastes_odors : [];
+    const tastesOdorsForZapier = tastesOdorsArray.length > 0 ? tastesOdorsArray.join(', ') : 'None';
     
     // Format filters for Zapier
     const filtersForZapier = data.survey.answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
