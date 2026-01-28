@@ -518,6 +518,29 @@ export default function KioskHome() {
           </View>
         )}
 
+        {/* Clock In Time Display */}
+        {isClockedIn && activeTimeEntry && (
+          <View style={[styles.clockInTimeCard, { backgroundColor: theme.surface, borderColor: theme.primary }]}>
+            <View style={styles.clockInTimeRow}>
+              <MaterialIcons name="access-time" size={24} color={theme.primary} />
+              <View style={styles.clockInTimeInfo}>
+                <Text style={[styles.clockInTimeLabel, { color: theme.textSubtle }]}>Clocked In At</Text>
+                <Text style={[styles.clockInTimeValue, { color: theme.text }]}>
+                  {formatDateTime12Hour(activeTimeEntry.clockIn)}
+                </Text>
+              </View>
+            </View>
+            {activeTimeEntry.gpsCoordinates && (
+              <View style={styles.clockInLocation}>
+                <MaterialIcons name="location-on" size={16} color={theme.textSubtle} />
+                <Text style={[styles.clockInLocationText, { color: theme.textSubtle }]}>
+                  {activeTimeEntry.gpsCoordinates.latitude.toFixed(4)}, {activeTimeEntry.gpsCoordinates.longitude.toFixed(4)}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Daily Stats - Only show when clocked in */}
         {isClockedIn && dailyStats && (
           <View style={[styles.statsCard, { backgroundColor: theme.surface }]}>
@@ -527,7 +550,12 @@ export default function KioskHome() {
                   <MaterialIcons name="access-time" size={20} color="#FFFFFF" />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>
-                  {dailyStats.hoursWorked.toFixed(1)}
+                  {(() => {
+                    const now = new Date();
+                    const clockInTime = new Date(activeTimeEntry.clockIn);
+                    const hours = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+                    return hours.toFixed(1);
+                  })()}
                 </Text>
                 <Text style={[styles.statLabel, { color: theme.textSubtle }]}>Hours</Text>
               </View>
@@ -993,6 +1021,42 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
     lineHeight: 18,
+  },
+  clockInTimeCard: {
+    borderRadius: 12,
+    borderWidth: 2,
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  clockInTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  clockInTimeInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  clockInTimeLabel: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  clockInTimeValue: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: '700',
+  },
+  clockInLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingTop: SPACING.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E0E0E0',
+  },
+  clockInLocationText: {
+    fontSize: FONTS.sizes.xs,
   },
   onboardingBanner: {
     flexDirection: 'row',
