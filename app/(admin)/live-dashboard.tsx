@@ -18,6 +18,7 @@ interface EmployeeStatus {
   };
   isInactive: boolean;
   inactiveMinutes: number;
+  notInApp?: boolean;
 }
 
 export default function LiveDashboard() {
@@ -263,7 +264,7 @@ export default function LiveDashboard() {
             </Text>
           </View>
         ) : (
-          clockedInEmployees.map(({ employee, timeEntry, todayStats, isInactive, inactiveMinutes }) => {
+          clockedInEmployees.map(({ employee, timeEntry, todayStats, isInactive, inactiveMinutes, notInApp }) => {
             const surveysPerHour = getSurveysPerHour(todayStats, timeEntry.clockIn);
             const performanceColor = getPerformanceColor(surveysPerHour);
             const qualifiedSurveys = todayStats.surveys + todayStats.appointments;
