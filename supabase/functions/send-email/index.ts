@@ -2,7 +2,10 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
 const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
-const FROM_EMAIL = 'noreply@rainsoft.com'; // Update with your verified sender email
+// ⚠️ IMPORTANT: This email MUST be verified in SendGrid Dashboard
+// Go to: Settings → Sender Authentication → Verify a Single Sender
+// Common verified emails: noreply@yourdomain.com, support@yourdomain.com
+const FROM_EMAIL = Deno.env.get('SENDGRID_FROM_EMAIL') || 'noreply@rainsoft.com';
 
 interface EmailRequest {
   to: string;
