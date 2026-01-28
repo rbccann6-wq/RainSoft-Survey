@@ -357,16 +357,13 @@ export default function AdminMessagesScreen() {
               />
               
               <Pressable
-                onPress={() => {
-                  if (messageText.trim()) {
-                    sendMessage();
-                  }
-                }}
+                onPress={sendMessage}
                 disabled={!messageText.trim()}
                 style={[
                   styles.sendButton,
                   !messageText.trim() && styles.sendButtonDisabled
                 ]}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
               >
                 <MaterialIcons 
                   name="arrow-upward" 

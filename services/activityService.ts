@@ -67,15 +67,18 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
       // Find employee details from local storage
       const employee = allEmployees.find(emp => emp.id === entry.employeeId);
       if (!employee) continue;
+      
       let lastActivityTime: number;
       let lastActivityAt: string;
       let activitySource = '';
+      let isInSurveyKiosk = false;
       
       // PRIORITY 1: Check heartbeat activity (most recent indicator)
+      // FIX: Use correct field names for local storage (camelCase)
       const { data: recentActivity } = await supabase
         .from('user_activity')
-        .select('created_at, event_type, page_path')
-        .eq('employee_id', entry.employee_id)
+        .select('created_at, event_type, page_path, metadata')
+        .eq('employee_id', entry.employeeId) // FIX: Use camelCase
         .eq('time_entry_id', entry.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -85,10 +88,12 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
         lastActivityTime = new Date(recentActivity.created_at).getTime();
         lastActivityAt = recentActivity.created_at;
         activitySource = 'heartbeat';
+        // Check if user is in survey kiosk based on heartbeat page path
+        isInSurveyKiosk = recentActivity.page_path === '/kiosk/survey';
       } else {
         // PRIORITY 2: Check survey activity (indicates actual work)
         const employeeSurveysToday = allSurveys.filter(s => 
-          s.employeeId === entry.employee_id && 
+          s.employeeId === entry.employeeId && 
           s.timestamp.startsWith(today)
         );
         
@@ -99,33 +104,41 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
           lastActivityTime = new Date(lastSurvey.timestamp).getTime();
           lastActivityAt = lastSurvey.timestamp;
           activitySource = 'survey';
+          isInSurveyKiosk = false; // If using survey as source, no recent heartbeat means not in kiosk
         } else {
           // PRIORITY 3: No activity - use clock in time
-          lastActivityTime = new Date(entry.clock_in).getTime();
-          lastActivityAt = entry.clock_in;
+          lastActivityTime = new Date(entry.clockIn).getTime();
+          lastActivityAt = entry.clockIn;
           activitySource = 'clock_in';
+          isInSurveyKiosk = false;
         }
       }
       
       // Calculate inactivity duration in minutes
       const inactiveDuration = Math.floor((now - lastActivityTime) / (1000 * 60));
       
-      // IMMEDIATE INACTIVE: Employee explicitly exited kiosk mode
+      // DETECTION CONDITIONS:
+      // 1. Employee explicitly exited kiosk mode
       const hasExitedKiosk = entry.isActiveInKiosk === false;
       
-      // HEARTBEAT INACTIVE: No heartbeat in last 2 minutes (should send every 30s)
-      const heartbeatTimeout = activitySource === 'heartbeat' ? inactiveDuration >= 2 : false;
+      // 2. No heartbeat in last 2 minutes (app not running or not in focus)
+      const heartbeatTimeout = activitySource === 'heartbeat' && inactiveDuration >= 2;
       
-      // WORK INACTIVE: No surveys/activity for threshold duration
+      // 3. No heartbeat data at all (not in app)
+      const notInApp = activitySource !== 'heartbeat';
+      
+      // 4. No surveys/activity for threshold duration
       const workInactive = inactiveDuration >= inactivityThresholdMinutes;
       
       // Mark as inactive if ANY condition is true
-      if (hasExitedKiosk || heartbeatTimeout || workInactive) {
+      if (hasExitedKiosk || heartbeatTimeout || notInApp || workInactive) {
         let reason = '';
         if (hasExitedKiosk) {
           reason = 'Exited kiosk mode';
+        } else if (notInApp && !isInSurveyKiosk) {
+          reason = `Not in app (${inactiveDuration}m)`;
         } else if (heartbeatTimeout) {
-          reason = `App not in focus (no heartbeat ${inactiveDuration}m)`;
+          reason = `App not in focus (${inactiveDuration}m)`;
         } else {
           reason = `No activity for ${inactiveDuration}m`;
         }
