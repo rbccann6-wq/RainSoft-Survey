@@ -40,14 +40,14 @@ const getStateAbbreviation = (state: string): string => {
   return abbr || trimmed; // Return original if not found
 };
 
-// Salesforce Configuration
+// Salesforce Configuration - MOVED TO ENVIRONMENT VARIABLES
 export const SALESFORCE_CONFIG = {
-  instanceUrl: 'https://rainsoftse.my.salesforce.com',
-  clientId: '3MVG9uudbyLbNPZOVAuKR02gSIspVipjLsqn.uFTfCA67gYvmarMV7HvBPuPVb2.oAqFn8eLxG3MuAfLiSpNO',
-  clientSecret: '11173C4B71CA90A7E860D9E31D908AB5CF221CAE6CB9E859B16ED5D6DD6F8002',
-  username: 'rebecca@rainsoftse.com',
-  password: '06RAPPAR.!',
-  securityToken: '', // IP Relaxation enabled - no security token needed
+  instanceUrl: process.env.EXPO_PUBLIC_SALESFORCE_INSTANCE_URL || 'https://rainsoftse.my.salesforce.com',
+  clientId: process.env.EXPO_PUBLIC_SALESFORCE_CLIENT_ID || '',
+  clientSecret: process.env.EXPO_PUBLIC_SALESFORCE_CLIENT_SECRET || '',
+  username: process.env.EXPO_PUBLIC_SALESFORCE_USERNAME || '',
+  password: process.env.EXPO_PUBLIC_SALESFORCE_PASSWORD || '',
+  securityToken: process.env.EXPO_PUBLIC_SALESFORCE_SECURITY_TOKEN || '',
 };
 
 // Zapier Webhook Configuration

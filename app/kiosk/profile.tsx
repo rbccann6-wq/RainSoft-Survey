@@ -53,6 +53,45 @@ export default function ProfileScreen() {
     setIsEditingAvailability(false);
     showAlert('Success', 'Availability updated');
   };
+
+  const handleDeleteAccount = () => {
+    showAlert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data including:\n\n• Profile information\n• Survey history\n• Time entries\n• Documents\n• Messages\n\nThis action CANNOT be undone. Are you absolutely sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (!currentUser) return;
+              
+              const { getSupabaseClient } = require('@/template');
+              const supabase = getSupabaseClient();
+              
+              // Delete user account from Supabase Auth
+              const { error: deleteError } = await supabase.auth.admin.deleteUser(currentUser.id);
+              
+              if (deleteError) {
+                throw new Error(`Failed to delete account: ${deleteError.message}`);
+              }
+              
+              // Logout and redirect to login
+              const { logout } = require('@/hooks/useApp');
+              await logout();
+              
+              showAlert('Account Deleted', 'Your account has been permanently deleted.');
+              router.replace('/login');
+            } catch (error) {
+              console.error('Account deletion error:', error);
+              showAlert('Error', error instanceof Error ? error.message : 'Failed to delete account. Please contact support.');
+            }
+          },
+        },
+      ]
+    );
+  };
   
   const handleUploadProfilePicture = async () => {
     try {
@@ -468,6 +507,30 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
+
+        {/* Delete Account Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Management</Text>
+          
+          <View style={styles.card}>
+            <View style={styles.dangerZone}>
+              <MaterialIcons name="warning" size={24} color={LOWES_THEME.error} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
+                <Text style={styles.dangerZoneText}>
+                  Permanently delete your account and all associated data. This action cannot be undone.
+                </Text>
+              </View>
+            </View>
+            
+            <Button
+              title="Delete My Account"
+              onPress={handleDeleteAccount}
+              backgroundColor={LOWES_THEME.error}
+              fullWidth
+            />
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -715,5 +778,25 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: FONTS.sizes.md,
     color: LOWES_THEME.textSubtle,
+  },
+  dangerZone: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    padding: SPACING.md,
+    backgroundColor: '#FFF3F3',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFE0E0',
+  },
+  dangerZoneTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '700',
+    color: LOWES_THEME.error,
+    marginBottom: 4,
+  },
+  dangerZoneText: {
+    fontSize: FONTS.sizes.sm,
+    color: LOWES_THEME.text,
+    lineHeight: 18,
   },
 });
