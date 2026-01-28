@@ -48,6 +48,7 @@ export default function AdminDashboard() {
   const now = Date.now();
   const inactiveThreshold = 15 * 60 * 1000; // 15 minutes
   
+  // Enhanced status detection using BOTH heartbeat and survey activity
   const employeeStatus = clockedInEmployees.map(emp => {
     const latestEntry = timeEntries
       .filter(te => te.employeeId === emp.id && !te.clockOut)
@@ -62,6 +63,7 @@ export default function AdminDashboard() {
     
     let lastActivityTime: number;
     let activitySource = 'clock_in';
+    let notInApp = false;
     
     if (employeeSurveysToday.length > 0) {
       const lastSurvey = employeeSurveysToday.sort((a, b) => 
@@ -69,14 +71,17 @@ export default function AdminDashboard() {
       )[0];
       lastActivityTime = new Date(lastSurvey.timestamp).getTime();
       activitySource = 'survey';
+      // Check if last survey was more than 60s ago (heartbeat timeout)
+      notInApp = (now - lastActivityTime) > 60 * 1000;
     } else {
+      // No surveys today = definitely not in app
       lastActivityTime = latestEntry ? new Date(latestEntry.clockIn).getTime() : 0;
       activitySource = 'clock_in';
+      notInApp = true;
     }
     
     const inactiveDuration = Math.floor((now - lastActivityTime) / (1000 * 60));
     const isInactive = (now - lastActivityTime) > inactiveThreshold;
-    const notInApp = activitySource === 'clock_in' && inactiveDuration >= 5; // No surveys = not in app
     
     return {
       ...emp,
@@ -302,18 +307,18 @@ export default function AdminDashboard() {
                   key={emp.id} 
                   style={[
                     styles.employeeCard,
-                    emp.isInactive && styles.inactiveEmployeeCard,
+                    (emp.isInactive || emp.notInApp) && styles.inactiveEmployeeCard,
                   ]}
                 >
                   <View style={styles.employeeInfo}>
                     <View style={styles.employeeHeader}>
                       <View style={[
                         styles.statusDot,
-                        { backgroundColor: emp.isInactive ? '#F44336' : '#4CAF50' },
+                        { backgroundColor: (emp.isInactive || emp.notInApp) ? '#F44336' : '#4CAF50' },
                       ]} />
                       <Text style={[
                         styles.employeeName,
-                        emp.isInactive && styles.inactiveText,
+                        (emp.isInactive || emp.notInApp) && styles.inactiveText,
                       ]}>
                         {emp.firstName} {emp.lastName}
                       </Text>
@@ -342,14 +347,21 @@ export default function AdminDashboard() {
                       </Text>
                     </View>
                     
-                    {(emp.isInactive || emp.notInApp) && (
-                      <View style={styles.inactiveBadge}>
-                        <MaterialIcons name="warning" size={12} color="#F44336" />
-                        <Text style={styles.inactiveBadgeText}>
-                          {emp.notInApp ? 'Not in app' : `Inactive ${emp.inactiveDuration}m`}
-                        </Text>
-                      </View>
-                    )}
+                    {/* Status Badges - Show both if applicable */}
+                    <View style={styles.badgeContainer}>
+                      {emp.notInApp && (
+                        <View style={[styles.statusBadgeChip, styles.notInAppBadge]}>
+                          <MaterialIcons name="phonelink-off" size={14} color="#FFFFFF" />
+                          <Text style={styles.badgeChipText}>Not in app</Text>
+                        </View>
+                      )}
+                      {emp.isInactive && (
+                        <View style={[styles.statusBadgeChip, styles.inactiveBadgeChip]}>
+                          <MaterialIcons name="pause-circle-outline" size={14} color="#FFFFFF" />
+                          <Text style={styles.badgeChipText}>Inactive {emp.inactiveDuration}m</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
               ))}
@@ -553,6 +565,32 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: FONTS.sizes.xs,
     color: LOWES_THEME.textSubtle,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  statusBadgeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 12,
+  },
+  notInAppBadge: {
+    backgroundColor: '#F44336',
+  },
+  inactiveBadgeChip: {
+    backgroundColor: '#FF9800',
+  },
+  badgeChipText: {
+    fontSize: FONTS.sizes.xs,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   inactiveBadge: {
     flexDirection: 'row',

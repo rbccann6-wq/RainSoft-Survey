@@ -201,54 +201,70 @@ export default function ActivityMonitorScreen() {
             </View>
           ) : (
             <View style={styles.usersList}>
-              {inactiveUsers.map((user) => (
-                <View key={user.employeeId} style={styles.inactiveUserCard}>
-                  <View style={styles.userHeader}>
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{user.employeeName}</Text>
-                      <Text style={styles.userStore}>
-                        {user.store === 'lowes' ? 'Lowes' : 'Home Depot'}
-                      </Text>
-                    </View>
-                    <View style={styles.inactiveBadge}>
-                      <MaterialIcons name="alarm-off" size={20} color="#FFFFFF" />
-                      <Text style={styles.inactiveDuration}>
-                        {formatDuration(user.inactiveDurationMinutes)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.userDetails}>
-                    <View style={styles.detailRow}>
-                      <MaterialIcons name="schedule" size={16} color="#666" />
-                      <Text style={styles.detailText}>
-                        Last activity: {formatTimestamp(user.lastActivityAt)}
-                      </Text>
-                    </View>
-                    {user.currentPage && (
-                      <View style={styles.detailRow}>
-                        <MaterialIcons name="location-on" size={16} color="#666" />
-                        <Text style={styles.detailText}>{user.currentPage}</Text>
+              {inactiveUsers.map((user) => {
+                const isNotInApp = user.currentPage?.includes('Not in app') || user.currentPage?.includes('not in focus');
+                return (
+                  <View key={user.employeeId} style={[
+                    styles.inactiveUserCard,
+                    isNotInApp && styles.notInAppCard,
+                  ]}>
+                    <View style={styles.userHeader}>
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName}>{user.employeeName}</Text>
+                        <Text style={styles.userStore}>
+                          {user.store === 'lowes' ? 'Lowes' : 'Home Depot'}
+                        </Text>
                       </View>
-                    )}
-                  </View>
+                      <View style={styles.badgeGroup}>
+                        {isNotInApp && (
+                          <View style={[styles.inactiveBadge, { backgroundColor: '#F44336' }]}>
+                            <MaterialIcons name="phonelink-off" size={18} color="#FFFFFF" />
+                            <Text style={styles.inactiveDuration}>NOT IN APP</Text>
+                          </View>
+                        )}
+                        {!isNotInApp && (
+                          <View style={[styles.inactiveBadge, { backgroundColor: '#FF9800' }]}>
+                            <MaterialIcons name="pause-circle-outline" size={18} color="#FFFFFF" />
+                            <Text style={styles.inactiveDuration}>
+                              INACTIVE {formatDuration(user.inactiveDurationMinutes)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
 
-                  <View style={styles.userActions}>
-                    <Button
-                      title="Log"
-                      onPress={() => handleLogInactivity(user)}
-                      variant="outline"
-                      icon="event-note"
-                    />
-                    <Button
-                      title="Force Clock Out"
-                      onPress={() => handleForceClockOut(user)}
-                      variant="danger"
-                      icon="logout"
-                    />
+                    <View style={styles.userDetails}>
+                      <View style={styles.detailRow}>
+                        <MaterialIcons name="schedule" size={16} color="#666" />
+                        <Text style={styles.detailText}>
+                          Last activity: {formatTimestamp(user.lastActivityAt)}
+                        </Text>
+                      </View>
+                      {user.currentPage && (
+                        <View style={styles.detailRow}>
+                          <MaterialIcons name="info-outline" size={16} color="#666" />
+                          <Text style={styles.detailText}>{user.currentPage}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.userActions}>
+                      <Button
+                        title="Log"
+                        onPress={() => handleLogInactivity(user)}
+                        variant="outline"
+                        icon="event-note"
+                      />
+                      <Button
+                        title="Force Clock Out"
+                        onPress={() => handleForceClockOut(user)}
+                        variant="danger"
+                        icon="logout"
+                      />
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
         </View>
@@ -415,12 +431,16 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     gap: SPACING.md,
     borderLeftWidth: 4,
-    borderLeftColor: LOWES_THEME.error,
+    borderLeftColor: '#FF9800',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  notInAppCard: {
+    borderLeftColor: '#F44336',
+    backgroundColor: '#FFEBEE',
   },
   userHeader: {
     flexDirection: 'row',
@@ -439,19 +459,29 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     color: '#666',
   },
+  badgeGroup: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    flexWrap: 'wrap',
+  },
   inactiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: LOWES_THEME.error,
-    paddingVertical: 4,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   inactiveDuration: {
     color: '#FFFFFF',
-    fontSize: FONTS.sizes.sm,
+    fontSize: FONTS.sizes.xs,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   userDetails: {
     gap: SPACING.xs,

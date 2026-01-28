@@ -52,6 +52,7 @@ export default function LiveDashboard() {
       // Get last activity time
       let lastActivityTime: number;
       let activitySource = 'clock_in';
+      let notInApp = false;
       
       if (employeeSurveysToday.length > 0) {
         // Use last survey time as last activity
@@ -60,15 +61,17 @@ export default function LiveDashboard() {
         )[0];
         lastActivityTime = new Date(lastSurvey.timestamp).getTime();
         activitySource = 'survey';
+        // Check if last survey was more than 60s ago (heartbeat timeout)
+        notInApp = (now - lastActivityTime) > 60 * 1000;
       } else {
-        // Use clock in time if no surveys
+        // No surveys today = definitely not in app
         lastActivityTime = new Date(emp.timeEntry.clockIn).getTime();
         activitySource = 'clock_in';
+        notInApp = true;
       }
       
       const inactiveMinutes = Math.floor((now - lastActivityTime) / (1000 * 60));
       const isInactive = (now - lastActivityTime) > inactivityThreshold;
-      const notInApp = activitySource === 'clock_in' && inactiveMinutes >= 5; // No surveys = not in app
       
       return {
         ...emp,
@@ -132,21 +135,25 @@ export default function LiveDashboard() {
       {
         key: 'status',
         label: 'Status',
-        width: 120,
+        width: 180,
         render: (item) => (
-          <View
-            style={[
-              styles.tableStatusBadge,
-              {
-                backgroundColor: item.isInactive
-                  ? '#FF9800'
-                  : '#4CAF50',
-              },
-            ]}
-          >
-            <Text style={styles.tableStatusText}>
-              {item.isInactive ? `INACTIVE ${item.inactiveMinutes}m` : 'ACTIVE'}
-            </Text>
+          <View style={styles.tableBadgeContainer}>
+            {item.notInApp ? (
+              <View style={[styles.tableStatusBadge, { backgroundColor: '#F44336' }]}>
+                <MaterialIcons name="phonelink-off" size={14} color="#FFFFFF" />
+                <Text style={styles.tableStatusText}>NOT IN APP</Text>
+              </View>
+            ) : item.isInactive ? (
+              <View style={[styles.tableStatusBadge, { backgroundColor: '#FF9800' }]}>
+                <MaterialIcons name="pause-circle-outline" size={14} color="#FFFFFF" />
+                <Text style={styles.tableStatusText}>INACTIVE {item.inactiveMinutes}m</Text>
+              </View>
+            ) : (
+              <View style={[styles.tableStatusBadge, { backgroundColor: '#4CAF50' }]}>
+                <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
+                <Text style={styles.tableStatusText}>ACTIVE</Text>
+              </View>
+            )}
           </View>
         ),
       },
@@ -285,25 +292,26 @@ export default function LiveDashboard() {
                     </View>
                   </View>
 
-                  {/* Active/Inactive Status Badge */}
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor: (isInactive || notInApp)
-                          ? '#FF9800'
-                          : '#4CAF50',
-                      },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={(isInactive || notInApp) ? 'pause-circle-outline' : 'check-circle'}
-                      size={16}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.statusText}>
-                      {notInApp ? 'NOT IN APP' : isInactive ? `INACTIVE ${inactiveMinutes}m` : 'ACTIVE'}
-                    </Text>
+                  {/* Status Badges - Show separately for clarity */}
+                  <View style={styles.statusBadgeContainer}>
+                    {notInApp && (
+                      <View style={[styles.statusBadge, { backgroundColor: '#F44336' }]}>
+                        <MaterialIcons name="phonelink-off" size={16} color="#FFFFFF" />
+                        <Text style={styles.statusText}>NOT IN APP</Text>
+                      </View>
+                    )}
+                    {!notInApp && isInactive && (
+                      <View style={[styles.statusBadge, { backgroundColor: '#FF9800' }]}>
+                        <MaterialIcons name="pause-circle-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.statusText}>INACTIVE {inactiveMinutes}m</Text>
+                      </View>
+                    )}
+                    {!notInApp && !isInactive && (
+                      <View style={[styles.statusBadge, { backgroundColor: '#4CAF50' }]}>
+                        <MaterialIcons name="check-circle" size={16} color="#FFFFFF" />
+                        <Text style={styles.statusText}>ACTIVE</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -436,9 +444,16 @@ const styles = StyleSheet.create({
     color: LOWES_THEME.textSubtle,
     marginTop: 2,
   },
+  tableBadgeContainer: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
   tableStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 12,
     alignSelf: 'flex-start',
   },
@@ -538,12 +553,17 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     color: '#666',
   },
+  statusBadgeContainer: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    flexWrap: 'wrap',
+  },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
     borderRadius: 12,
   },
   statusText: {
