@@ -32,11 +32,12 @@ export interface InactivitySettings {
 }
 
 // ============================================================
-// SIMPLIFIED INACTIVITY DETECTION - ONE SOURCE OF TRUTH
-// Uses last survey time as the reliable indicator of activity
+// COMPREHENSIVE INACTIVITY DETECTION
+// Uses BOTH heartbeat tracking AND survey activity
+// Detects: App exits, minimized apps, and actual work inactivity
 // ============================================================
 
-// SIMPLIFIED & RELIABLE: Check for inactive clocked-in users based on last survey time
+// COMPREHENSIVE: Check for inactive clocked-in users using heartbeat + survey activity
 export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5): Promise<InactiveUser[]> => {
   try {
     const { getSurveys } = require('@/services/storageService');
@@ -49,6 +50,7 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
         employee_id,
         store,
         clock_in,
+        is_active_in_kiosk,
         employees!inner(id, first_name, last_name)
       `)
       .is('clock_out', null);
@@ -64,41 +66,76 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
 
     // Check each clocked-in employee
     for (const entry of activeEntries) {
-      // Find employee's surveys today
-      const employeeSurveysToday = allSurveys.filter(s => 
-        s.employeeId === entry.employee_id && 
-        s.timestamp.startsWith(today)
-      );
-      
-      // Determine last activity time
       let lastActivityTime: number;
       let lastActivityAt: string;
+      let activitySource = '';
       
-      if (employeeSurveysToday.length > 0) {
-        // Use last survey time as last activity
-        const lastSurvey = employeeSurveysToday.sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        )[0];
-        lastActivityTime = new Date(lastSurvey.timestamp).getTime();
-        lastActivityAt = lastSurvey.timestamp;
+      // PRIORITY 1: Check heartbeat activity (most recent indicator)
+      const { data: recentActivity } = await supabase
+        .from('user_activity')
+        .select('created_at, event_type, page_path')
+        .eq('employee_id', entry.employee_id)
+        .eq('time_entry_id', entry.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (recentActivity) {
+        lastActivityTime = new Date(recentActivity.created_at).getTime();
+        lastActivityAt = recentActivity.created_at;
+        activitySource = 'heartbeat';
       } else {
-        // No surveys - use clock in time as last activity
-        lastActivityTime = new Date(entry.clock_in).getTime();
-        lastActivityAt = entry.clock_in;
+        // PRIORITY 2: Check survey activity (indicates actual work)
+        const employeeSurveysToday = allSurveys.filter(s => 
+          s.employeeId === entry.employee_id && 
+          s.timestamp.startsWith(today)
+        );
+        
+        if (employeeSurveysToday.length > 0) {
+          const lastSurvey = employeeSurveysToday.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )[0];
+          lastActivityTime = new Date(lastSurvey.timestamp).getTime();
+          lastActivityAt = lastSurvey.timestamp;
+          activitySource = 'survey';
+        } else {
+          // PRIORITY 3: No activity - use clock in time
+          lastActivityTime = new Date(entry.clock_in).getTime();
+          lastActivityAt = entry.clock_in;
+          activitySource = 'clock_in';
+        }
       }
       
       // Calculate inactivity duration in minutes
       const inactiveDuration = Math.floor((now - lastActivityTime) / (1000 * 60));
       
-      // Check if employee is inactive based on threshold
-      if (inactiveDuration >= inactivityThresholdMinutes) {
+      // IMMEDIATE INACTIVE: Employee explicitly exited kiosk mode
+      const hasExitedKiosk = entry.is_active_in_kiosk === false;
+      
+      // HEARTBEAT INACTIVE: No heartbeat in last 2 minutes (should send every 30s)
+      const heartbeatTimeout = activitySource === 'heartbeat' ? inactiveDuration >= 2 : false;
+      
+      // WORK INACTIVE: No surveys/activity for threshold duration
+      const workInactive = inactiveDuration >= inactivityThresholdMinutes;
+      
+      // Mark as inactive if ANY condition is true
+      if (hasExitedKiosk || heartbeatTimeout || workInactive) {
+        let reason = '';
+        if (hasExitedKiosk) {
+          reason = 'Exited kiosk mode';
+        } else if (heartbeatTimeout) {
+          reason = `App not in focus (no heartbeat ${inactiveDuration}m)`;
+        } else {
+          reason = `No activity for ${inactiveDuration}m`;
+        }
+        
         inactiveUsers.push({
           employeeId: entry.employee_id,
           employeeName: `${(entry.employees as any).first_name} ${(entry.employees as any).last_name}`,
           timeEntryId: entry.id,
           lastActivityAt,
           inactiveDurationMinutes: inactiveDuration,
-          currentPage: employeeSurveysToday.length === 0 ? 'No surveys today' : undefined,
+          currentPage: reason,
           store: entry.store,
         });
       }
