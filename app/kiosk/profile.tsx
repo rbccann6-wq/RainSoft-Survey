@@ -73,20 +73,72 @@ export default function ProfileScreen() {
       
       if (!result.canceled && result.assets[0]) {
         setIsUploadingPhoto(true);
-        const photoUri = result.assets[0].uri;
+        const imageUri = result.assets[0].uri;
         
-        // Update employee profile picture
-        await StorageService.updateEmployee(currentUser!.id, { profilePictureUri: photoUri });
-        await loadData();
-        
-        setIsUploadingPhoto(false);
-        showAlert('Success', 'Profile picture updated');
+        try {
+          // Upload to Supabase Storage
+          const publicUrl = await uploadProfilePicture(imageUri, currentUser!.id);
+          
+          // Update employee profile picture with public URL
+          await StorageService.updateEmployee(currentUser!.id, { profilePictureUri: publicUrl });
+          await loadData();
+          
+          setIsUploadingPhoto(false);
+          showAlert('Success', 'Profile picture updated');
+        } catch (uploadError) {
+          console.error('Upload error:', uploadError);
+          setIsUploadingPhoto(false);
+          showAlert('Error', uploadError instanceof Error ? uploadError.message : 'Failed to upload profile picture');
+        }
       }
     } catch (error) {
       console.error('Photo upload error:', error);
       setIsUploadingPhoto(false);
       showAlert('Error', 'Failed to upload profile picture');
     }
+  };
+
+  // Upload profile picture to Supabase Storage
+  const uploadProfilePicture = async (imageUri: string, employeeId: string): Promise<string> => {
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
+    
+    // Convert image to base64
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const arrayBuffer = await new Promise<ArrayBuffer>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as ArrayBuffer);
+      reader.readAsArrayBuffer(blob);
+    });
+    
+    // Generate unique filename
+    const fileExt = imageUri.split('.').pop() || 'jpg';
+    const fileName = `${employeeId}/profile-${Date.now()}.${fileExt}`;
+    
+    // Upload to storage bucket
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('profile-pictures')
+      .upload(fileName, arrayBuffer, {
+        contentType: `image/${fileExt}`,
+        upsert: true,
+      });
+    
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+    
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('profile-pictures')
+      .getPublicUrl(fileName);
+    
+    if (!urlData?.publicUrl) {
+      throw new Error('Failed to get public URL');
+    }
+    
+    return urlData.publicUrl;
   };
 
   const toggleDay = (day: keyof typeof availability) => {
