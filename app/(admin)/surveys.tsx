@@ -114,55 +114,66 @@ export default function SurveysScreen() {
 
     setSyncingId(survey.id);
     try {
-      const queue = await StorageService.getSyncQueue() || [];
-      
-      // Remove any existing queue items for this survey
-      const filteredQueue = queue.filter(item => 
-        item.data.id !== survey.id && 
-        (item.type !== 'appointment' || item.data.survey?.id !== survey.id)
-      );
+      // Build sync queue directly without reading existing queue
+      const syncQueue: any[] = [];
       
       // For appointments: sync to both Salesforce (survey) AND Zapier (appointment)
       if (survey.category === 'appointment' && survey.appointment) {
-        if (survey.syncedToSalesforce === false) {
-          filteredQueue.push({
-            type: 'survey',
-            data: survey,
-            timestamp: new Date().toISOString(),
-          });
-        }
-        if (survey.syncedToZapier === false) {
-          filteredQueue.push({
-            type: 'appointment',
-            data: { survey, appointment: survey.appointment },
-            timestamp: new Date().toISOString(),
-          });
-        }
-      } else {
-        // Regular surveys only sync to Salesforce
-        filteredQueue.push({
+        console.log('🔄 Retrying appointment sync - Salesforce + Zapier');
+        
+        // Always add Salesforce sync for appointment surveys
+        syncQueue.push({
           type: 'survey',
-          data: survey,
+          data: { ...survey, syncedToSalesforce: false, syncError: undefined },
+          timestamp: new Date().toISOString(),
+        });
+        
+        // Always add Zapier sync for appointments
+        syncQueue.push({
+          type: 'appointment',
+          data: { 
+            survey: { ...survey, syncedToZapier: false, syncError: undefined }, 
+            appointment: survey.appointment 
+          },
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        console.log('🔄 Retrying survey sync - Salesforce only');
+        // Regular surveys only sync to Salesforce
+        syncQueue.push({
+          type: 'survey',
+          data: { ...survey, syncedToSalesforce: false, syncError: undefined },
           timestamp: new Date().toISOString(),
         });
       }
       
-      await StorageService.saveData('sync_queue', filteredQueue);
-      const result = await SyncService.triggerImmediateSync();
+      console.log(`📦 Processing ${syncQueue.length} sync items...`);
+      const result = await SyncService.processSyncQueue(syncQueue);
+      console.log(`✅ Sync result: ${result.synced} synced, ${result.failed} failed, ${result.duplicates} duplicates`);
+      
+      // Force reload data to get updated sync status
       await loadData();
       
-      if (result.synced > 0) {
-        const syncType = survey.category === 'appointment' ? 'Salesforce and Zapier' : 'Salesforce';
-        showAlert('Sync Successful ✓', `Survey synced to ${syncType} successfully!`);
-      } else if (result.failed > 0) {
-        const updatedSurveys = await StorageService.getSurveys() || [];
-        const syncedSurvey = updatedSurveys.find(s => s.id === survey.id);
-        const errorMsg = syncedSurvey?.syncError || 'Unknown error';
-        showAlert('Sync Failed', `Failed to sync survey:\n\n${errorMsg}`);
-      } else if (result.duplicates > 0) {
-        showAlert('Duplicate Detected', 'This survey already exists in Salesforce.');
-      }
+      // Give UI time to update before showing result
+      setTimeout(() => {
+        if (result.synced > 0) {
+          const syncType = survey.category === 'appointment' ? 'Salesforce and Zapier' : 'Salesforce';
+          showAlert('Sync Successful ✓', `Survey synced to ${syncType} successfully!`);
+        } else if (result.failed > 0) {
+          // Get the updated survey to show actual error
+          StorageService.getSurveys().then(updatedSurveys => {
+            const syncedSurvey = updatedSurveys?.find(s => s.id === survey.id);
+            const errorMsg = syncedSurvey?.syncError || 'Sync failed - check sync error details';
+            showAlert('Sync Failed', `Failed to sync survey:\n\n${errorMsg}`);
+          });
+        } else if (result.duplicates > 0) {
+          showAlert('Duplicate Detected', 'This survey already exists in Salesforce.');
+        } else {
+          showAlert('No Changes', 'Survey may already be synced or does not qualify for sync.');
+        }
+      }, 500);
     } catch (error) {
+      console.error('❌ Retry sync error:', error);
       showAlert('Error', `Failed to retry sync: ${String(error)}`);
     } finally {
       setSyncingId(null);

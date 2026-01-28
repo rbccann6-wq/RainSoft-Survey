@@ -457,7 +457,10 @@ export const sendToZapier = async (data: {
   appointment: Appointment;
 }): Promise<boolean> => {
   try {
-    console.log('🔄 Sending appointment to Zapier:', data.appointment);
+    console.log('🔄 [ZAPIER] Starting Zapier webhook...');
+    console.log('🔄 [ZAPIER] Webhook URL:', ZAPIER_WEBHOOK_URL);
+    console.log('🔄 [ZAPIER] Survey ID:', data.survey.id);
+    console.log('🔄 [ZAPIER] Appointment data:', JSON.stringify(data.appointment, null, 2));
     
     // Prepare webhook payload
     const payload = {
@@ -492,6 +495,9 @@ export const sendToZapier = async (data: {
       survey_id: data.survey.id,
     };
     
+    console.log('📦 [ZAPIER] Full payload:', JSON.stringify(payload, null, 2));
+    console.log('🚀 [ZAPIER] Sending POST request...');
+    
     const response = await fetch(ZAPIER_WEBHOOK_URL, {
       method: 'POST',
       headers: {
@@ -500,15 +506,22 @@ export const sendToZapier = async (data: {
       body: JSON.stringify(payload),
     });
 
+    console.log('📶 [ZAPIER] Response status:', response.status);
+    console.log('📶 [ZAPIER] Response OK:', response.ok);
+    
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('❌ [ZAPIER] Error response body:', errorText);
       throw new Error(`Zapier webhook failed: ${response.status} - ${errorText}`);
     }
 
-    console.log('✅ Appointment sent to Zapier successfully');
+    const responseText = await response.text();
+    console.log('✅ [ZAPIER] Success response:', responseText);
+    console.log('✅ [ZAPIER] Appointment sent to Zapier successfully');
     return true;
   } catch (error) {
-    console.error('❌ Zapier webhook error:', error);
+    console.error('❌ [ZAPIER] Webhook error:', error);
+    console.error('❌ [ZAPIER] Error details:', JSON.stringify(error, null, 2));
     throw error;
   }
 };
@@ -545,7 +558,7 @@ export const processSyncQueue = async (
   for (const item of queue) {
     try {
       const retryCount = item.retryCount || 0;
-      console.log(`🔄 Syncing ${item.type} (attempt ${retryCount + 1}):`, item.data.id);
+      console.log(`🔄 Syncing ${item.type} (attempt ${retryCount + 1}):`, item.data.id || item.data.survey?.id);
       
       if (item.type === 'survey') {
         const survey = item.data as Survey;
@@ -609,6 +622,9 @@ export const processSyncQueue = async (
         }
       } else if (item.type === 'appointment') {
         const { survey, appointment } = item.data;
+        console.log('📍 [APPOINTMENT SYNC] Processing appointment for survey:', survey.id);
+        console.log('📍 [APPOINTMENT SYNC] Appointment details:', appointment);
+        
         await sendToZapier({ survey, appointment });
         
         // Mark as synced
@@ -624,7 +640,7 @@ export const processSyncQueue = async (
         syncedCount++;
       }
     } catch (error) {
-      console.error(`❌ Sync failed for ${item.type}:`, item.data.id, error);
+      console.error(`❌ Sync failed for ${item.type}:`, item.data.id || item.data.survey?.id, error);
       
       const retryCount = (item.retryCount || 0) + 1;
       const errorMessage = error instanceof Error ? error.message : String(error);
