@@ -346,29 +346,26 @@ export default function MessagesScreen() {
           {/* iPhone-style Input Bar */}
           <View style={[
             styles.inputBar,
-            { paddingBottom: Math.max(insets.bottom, SPACING.sm) }
+            { paddingBottom: Math.max(insets.bottom, 8) }
           ]}>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.textInput}
-                value={messageText}
-                onChangeText={setMessageText}
-                placeholder="Message"
-                placeholderTextColor="#8E8E93"
-                multiline
-                maxLength={1000}
-              />
-              
-              <Pressable
-                onPress={handleSendMessage}
-                style={({ pressed }) => [
-                  styles.sendButton,
-                  pressed && styles.sendButtonPressed
-                ]}
-              >
-                <MaterialIcons name="send" size={22} color="#FFFFFF" />
-              </Pressable>
-            </View>
+            <TextInput
+              style={styles.textInput}
+              value={messageText}
+              onChangeText={setMessageText}
+              placeholder="Message"
+              placeholderTextColor="#8E8E93"
+              multiline
+              maxLength={1000}
+            />
+            
+            <Pressable
+              onPress={handleSendMessage}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            >
+              <View style={styles.sendButton}>
+                <MaterialIcons name="send" size={24} color="#FFFFFF" />
+              </View>
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -833,41 +830,37 @@ const styles = StyleSheet.create({
   
   // Input Bar Styles
   inputBar: {
-    backgroundColor: '#F9F9F9',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#C6C6C8',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
-  inputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
+    alignItems: 'flex-end',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   textInput: {
     flex: 1,
     fontSize: 17,
     color: '#000000',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0F0F0',
     borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C6C6C8',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 36,
+    paddingVertical: 10,
+    minHeight: 40,
     maxHeight: 100,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  sendButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.96 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
