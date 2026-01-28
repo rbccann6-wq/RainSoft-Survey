@@ -1,6 +1,6 @@
 // Live manager dashboard - Monitor clocked-in employees
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useApp } from '@/hooks/useApp';
@@ -366,22 +366,42 @@ export default function LiveDashboard() {
                     : `Need ${(5 - parseFloat(surveysPerHour)).toFixed(1)} more per hour for quota`}
                 </Text>
 
-                {/* Clock In Details */}
-                <View style={styles.detailsRow}>
-                  <MaterialIcons name="schedule" size={14} color="#999" />
-                  <Text style={styles.detailText}>
-                    Clocked in at {formatDateTime12Hour(timeEntry.clockIn)}
-                  </Text>
-                </View>
+                {/* Clock In Details - 2 Column Layout */}
+                <View style={styles.clockInDetailsContainer}>
+                  {/* Left Column - Text Info */}
+                  <View style={styles.clockInDetailsLeft}>
+                    <View style={styles.detailsRow}>
+                      <MaterialIcons name="schedule" size={14} color="#999" />
+                      <Text style={styles.detailText}>
+                        Clocked in at {formatDateTime12Hour(timeEntry.clockIn)}
+                      </Text>
+                    </View>
 
-                {timeEntry.gpsCoordinates && (
-                  <View style={styles.detailsRow}>
-                    <MaterialIcons name="location-on" size={14} color="#999" />
-                    <Text style={styles.detailText}>
-                      {timeEntry.gpsCoordinates.latitude.toFixed(4)}, {timeEntry.gpsCoordinates.longitude.toFixed(4)}
-                    </Text>
+                    {timeEntry.gpsCoordinates && (
+                      <View style={styles.detailsRow}>
+                        <MaterialIcons name="location-on" size={14} color="#999" />
+                        <Text style={styles.detailText}>
+                          {timeEntry.gpsCoordinates.latitude.toFixed(4)}, {timeEntry.gpsCoordinates.longitude.toFixed(4)}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                )}
+
+                  {/* Right Column - Clock In Photo */}
+                  {timeEntry.photoUri && (
+                    <View style={styles.clockInPhotoContainer}>
+                      <Image 
+                        source={{ uri: timeEntry.photoUri }} 
+                        style={styles.clockInPhoto}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.photoLabel}>
+                        <MaterialIcons name="photo-camera" size={10} color="#666" />
+                        <Text style={styles.photoLabelText}>Clock In Photo</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
               </View>
             );
           })
@@ -613,16 +633,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  clockInDetailsContainer: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  clockInDetailsLeft: {
+    flex: 1,
+    gap: SPACING.xs,
+  },
   detailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    paddingTop: SPACING.xs,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
   },
   detailText: {
     fontSize: FONTS.sizes.xs,
     color: '#999',
+    flex: 1,
+  },
+  clockInPhotoContainer: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  clockInPhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  photoLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  photoLabelText: {
+    fontSize: 10,
+    color: '#666',
   },
 });
