@@ -200,7 +200,7 @@ export default function AppointmentScreen() {
               setAddress(data.description);
             }}
             query={{
-              key: 'AIzaSyBGKZ8vZ9Z9Z9Z9Z9Z9Z9Z9Z9Z9Z9Z', // You'll need to replace this with actual API key
+              key: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '',
               language: 'en',
               components: 'country:us',
             }}
