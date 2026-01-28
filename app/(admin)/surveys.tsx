@@ -119,7 +119,9 @@ export default function SurveysScreen() {
       
       // For appointments: sync to both Salesforce (survey) AND Zapier (appointment)
       if (survey.category === 'appointment' && survey.appointment) {
-        console.log('🔄 Retrying appointment sync - Salesforce + Zapier');
+        console.log('🔄 [RETRY] Appointment sync - Salesforce + Zapier');
+        console.log('🔄 [RETRY] Survey ID:', survey.id);
+        console.log('🔄 [RETRY] Appointment:', survey.appointment);
         
         // Always add Salesforce sync for appointment surveys
         syncQueue.push({
@@ -138,7 +140,8 @@ export default function SurveysScreen() {
           timestamp: new Date().toISOString(),
         });
       } else {
-        console.log('🔄 Retrying survey sync - Salesforce only');
+        console.log('🔄 [RETRY] Survey sync - Salesforce only');
+        console.log('🔄 [RETRY] Survey ID:', survey.id);
         // Regular surveys only sync to Salesforce
         syncQueue.push({
           type: 'survey',
@@ -147,34 +150,55 @@ export default function SurveysScreen() {
         });
       }
       
-      console.log(`📦 Processing ${syncQueue.length} sync items...`);
+      console.log(`📦 [RETRY] Processing ${syncQueue.length} sync items...`);
       const result = await SyncService.processSyncQueue(syncQueue);
-      console.log(`✅ Sync result: ${result.synced} synced, ${result.failed} failed, ${result.duplicates} duplicates`);
+      console.log(`📊 [RETRY] Sync result: synced=${result.synced}, failed=${result.failed}, duplicates=${result.duplicates}`);
       
-      // Force reload data to get updated sync status
+      // Wait 1 second for database writes to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force reload data to get updated sync status from database
+      console.log('🔄 [RETRY] Reloading survey data...');
       await loadData();
       
-      // Give UI time to update before showing result
-      setTimeout(() => {
-        if (result.synced > 0) {
+      // Wait another 500ms for state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Get the ACTUAL updated survey from state
+      const allSurveys = await StorageService.getSurveys();
+      const updatedSurvey = allSurveys?.find(s => s.id === survey.id);
+      
+      console.log('📊 [RETRY] Updated survey status:', {
+        id: updatedSurvey?.id,
+        syncedToSalesforce: updatedSurvey?.syncedToSalesforce,
+        syncedToZapier: updatedSurvey?.syncedToZapier,
+        syncError: updatedSurvey?.syncError,
+      });
+      
+      // Show result based on ACTUAL updated status
+      if (result.synced > 0 && updatedSurvey) {
+        const stillFailed = 
+          (survey.category === 'appointment' && (!updatedSurvey.syncedToSalesforce || !updatedSurvey.syncedToZapier)) ||
+          (survey.category !== 'appointment' && !updatedSurvey.syncedToSalesforce);
+          
+        if (stillFailed) {
+          const errorMsg = updatedSurvey.syncError || 'Sync completed but status shows failed - check Salesforce credentials in .env file';
+          showAlert('Sync Issue', `Sync attempted but may have failed:\n\n${errorMsg}\n\nCheck console logs for details.`);
+        } else {
           const syncType = survey.category === 'appointment' ? 'Salesforce and Zapier' : 'Salesforce';
           showAlert('Sync Successful ✓', `Survey synced to ${syncType} successfully!`);
-        } else if (result.failed > 0) {
-          // Get the updated survey to show actual error
-          StorageService.getSurveys().then(updatedSurveys => {
-            const syncedSurvey = updatedSurveys?.find(s => s.id === survey.id);
-            const errorMsg = syncedSurvey?.syncError || 'Sync failed - check sync error details';
-            showAlert('Sync Failed', `Failed to sync survey:\n\n${errorMsg}`);
-          });
-        } else if (result.duplicates > 0) {
-          showAlert('Duplicate Detected', 'This survey already exists in Salesforce.');
-        } else {
-          showAlert('No Changes', 'Survey may already be synced or does not qualify for sync.');
         }
-      }, 500);
+      } else if (result.failed > 0) {
+        const errorMsg = updatedSurvey?.syncError || 'Sync failed - check Salesforce credentials and network connection';
+        showAlert('Sync Failed', `Failed to sync survey:\n\n${errorMsg}`);
+      } else if (result.duplicates > 0) {
+        showAlert('Duplicate Detected', 'This survey already exists in Salesforce.');
+      } else {
+        showAlert('No Changes', 'Survey may already be synced or does not qualify for sync.');
+      }
     } catch (error) {
-      console.error('❌ Retry sync error:', error);
-      showAlert('Error', `Failed to retry sync: ${String(error)}`);
+      console.error('❌ [RETRY] Sync error:', error);
+      showAlert('Sync Error', `Failed to retry sync:\n\n${String(error)}\n\nCheck console logs for details.`);
     } finally {
       setSyncingId(null);
     }
