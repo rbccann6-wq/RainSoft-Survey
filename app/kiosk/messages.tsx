@@ -72,62 +72,66 @@ export default function MessagesScreen() {
     }
   }, [selectedConversation]);
 
-  const sendMessage = async () => {
-    if (!messageText.trim()) return;
+  const handleSendMessage = async () => {
+    const text = messageText.trim();
+    if (!text) {
+      showAlert('Please enter a message', 'error');
+      return;
+    }
     
     let recipientIds: string[] = [];
     let isGroup = false;
     
     if (selectedConversation) {
-      // Reply to existing conversation
       isGroup = selectedConversation === 'group';
       recipientIds = isGroup ? [] : [selectedConversation];
     } else if (showCompose && selectedRecipients.length > 0) {
-      // New message from compose
       isGroup = selectedRecipients.includes('group');
       recipientIds = isGroup ? [] : selectedRecipients;
     } else {
+      showAlert('Please select a recipient', 'error');
       return;
     }
 
-    const message: Message = {
-      id: Date.now().toString(),
-      senderId: currentUser!.id,
-      senderName: `${currentUser!.firstName} ${currentUser!.lastName}`,
-      recipientIds,
-      content: messageText.trim(),
-      timestamp: new Date().toISOString(),
-      readBy: [currentUser!.id],
-      reactions: {},
-      isGroupMessage: isGroup,
-    };
+    try {
+      const message: Message = {
+        id: Date.now().toString(),
+        senderId: currentUser!.id,
+        senderName: `${currentUser!.firstName} ${currentUser!.lastName}`,
+        recipientIds,
+        content: text,
+        timestamp: new Date().toISOString(),
+        readBy: [currentUser!.id],
+        reactions: {},
+        isGroupMessage: isGroup,
+      };
 
-    await StorageService.addMessage(message);
-    
-    // Send notifications
-    const NotificationService = await import('@/services/notificationService');
-    const recipients = isGroup 
-      ? employees.filter(e => e.id !== currentUser!.id && e.status === 'active')
-      : employees.filter(e => recipientIds.includes(e.id));
-    
-    if (recipients.length > 0) {
-      await NotificationService.notifyNewMessage(message, recipients);
+      await StorageService.addMessage(message);
+      
+      const NotificationService = await import('@/services/notificationService');
+      const recipients = isGroup 
+        ? employees.filter(e => e.id !== currentUser!.id && e.status === 'active')
+        : employees.filter(e => recipientIds.includes(e.id));
+      
+      if (recipients.length > 0) {
+        await NotificationService.notifyNewMessage(message, recipients);
+      }
+      
+      await loadData();
+      setMessageText('');
+      Keyboard.dismiss();
+      
+      if (showCompose) {
+        setShowCompose(false);
+        setSelectedRecipients([]);
+        setSelectedConversation(isGroup ? 'group' : recipientIds[0]);
+      }
+      
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (error) {
+      console.error('Send message error:', error);
+      showAlert('Failed to send message', 'error');
     }
-    
-    await loadData();
-    setMessageText('');
-    Keyboard.dismiss();
-    
-    if (showCompose) {
-      setShowCompose(false);
-      setSelectedRecipients([]);
-      setSelectedConversation(isGroup ? 'group' : recipientIds[0]);
-    }
-    
-    // Scroll to bottom after sending
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
   };
 
   const toggleRecipient = (id: string) => {
@@ -176,29 +180,13 @@ export default function MessagesScreen() {
                 setMessageText('');
               }} 
               style={styles.cancelButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
             
             <Text style={styles.composeTitle}>New Message</Text>
             
-            <Pressable 
-              onPress={() => {
-                if (messageText.trim() && selectedRecipients.length > 0) {
-                  sendMessage();
-                }
-              }}
-              style={styles.sendHeaderButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Text style={[
-                styles.sendHeaderText,
-                (!messageText.trim() || selectedRecipients.length === 0) && styles.sendHeaderTextDisabled
-              ]}>
-                Send
-              </Text>
-            </Pressable>
+            <View style={styles.headerRight} />
           </View>
 
           <ScrollView style={styles.composeScroll}>
@@ -369,20 +357,16 @@ export default function MessagesScreen() {
                 placeholderTextColor="#8E8E93"
                 multiline
                 maxLength={1000}
-                returnKeyType="send"
-                blurOnSubmit={false}
-                onSubmitEditing={sendMessage}
               />
               
               <Pressable
-                onPress={sendMessage}
-                style={styles.sendButton}
+                onPress={handleSendMessage}
+                style={({ pressed }) => [
+                  styles.sendButton,
+                  pressed && styles.sendButtonPressed
+                ]}
               >
-                <MaterialIcons 
-                  name="arrow-upward" 
-                  size={24} 
-                  color="#FFFFFF" 
-                />
+                <MaterialIcons name="send" size={22} color="#FFFFFF" />
               </Pressable>
             </View>
           </View>
@@ -435,19 +419,18 @@ export default function MessagesScreen() {
         <Pressable 
           onPress={() => router.back()}
           style={styles.headerBackButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialIcons name="chevron-left" size={32} color="#007AFF" />
+          <MaterialIcons name="chevron-left" size={28} color="#007AFF" />
         </Pressable>
         
         <Text style={styles.listTitle}>Messages</Text>
         
         <Pressable 
           onPress={() => setShowCompose(true)}
-          style={styles.composeButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.newMessageButton}
         >
-          <MaterialIcons name="create" size={24} color="#007AFF" />
+          <MaterialIcons name="edit" size={18} color="#FFFFFF" />
+          <Text style={styles.newMessageText}>New</Text>
         </Pressable>
       </View>
 
@@ -564,10 +547,19 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 80,
   },
-  composeButton: {
-    padding: SPACING.xs,
-    width: 80,
-    alignItems: 'flex-end',
+  newMessageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#007AFF',
+    borderRadius: 16,
+  },
+  newMessageText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   cancelButton: {
     paddingHorizontal: SPACING.sm,
@@ -584,18 +576,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  sendHeaderButton: {
-    paddingHorizontal: SPACING.sm,
+  headerRight: {
     width: 80,
-    alignItems: 'flex-end',
-  },
-  sendHeaderText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  sendHeaderTextDisabled: {
-    color: '#8E8E93',
   },
   composeScroll: {
     flex: 1,
@@ -878,12 +860,16 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 8 : 4,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: SPACING.sm,
+  },
+  sendButtonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
 });
