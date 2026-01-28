@@ -326,14 +326,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveTimeEntry(null);
     setSelectedStore(null);
     
-    // Notify managers
+    // Notify managers with detailed stats
     const managers = employees.filter(e => e.role === 'admin' || e.role === 'manager');
-    await NotificationService.notifyClockOut(
-      currentUser,
-      stats.hoursWorked,
-      stats.qualifiedSurveys,
-      managers
-    );
+    if (managers.length > 0) {
+      const appointmentsPerHour = stats.hoursWorked > 0 ? stats.appointments / stats.hoursWorked : 0;
+      await NotificationService.notifyClockOut(
+        currentUser,
+        {
+          hoursWorked: stats.hoursWorked,
+          qualifiedSurveys: stats.qualifiedSurveys,
+          appointments: stats.appointments,
+          surveysPerHour: stats.surveysPerHour,
+          appointmentsPerHour,
+        },
+        managers
+      );
+    }
   };
 
 const setKioskActive = async (isActive: boolean) => {

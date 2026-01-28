@@ -94,7 +94,7 @@ export default function AlertsManagementScreen() {
       );
       
       if (recipients.length > 0) {
-        await sendUrgentAlert(alert, recipients);
+        await sendUrgentAlert(alert, recipients, currentUser);
       } else {
         console.warn('No recipients found for alert');
       }

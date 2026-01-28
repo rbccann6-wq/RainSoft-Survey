@@ -63,6 +63,16 @@ export default function MessagesScreen() {
     await loadData();
     setNewMessage('');
     setShowCompose(false);
+    
+    // Send push notifications to recipients
+    const NotificationService = await import('@/services/notificationService');
+    const recipients = isGroup 
+      ? employees.filter(e => e.id !== currentUser!.id && e.status === 'active')
+      : employees.filter(e => e.id === recipientId);
+    
+    if (recipients.length > 0) {
+      await NotificationService.notifyNewMessage(message, recipients);
+    }
   };
 
   const markAsRead = async (messageId: string) => {

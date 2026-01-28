@@ -178,6 +178,13 @@ export default function AdminDashboard() {
           description: 'Push notifications',
         },
         {
+          icon: 'notifications-active',
+          label: 'Notification Settings',
+          route: '/(admin)/notification-settings',
+          color: '#9C27B0',
+          description: 'Push & SMS preferences',
+        },
+        {
           icon: 'visibility',
           label: 'Activity Monitor',
           route: '/(admin)/activity-monitor',

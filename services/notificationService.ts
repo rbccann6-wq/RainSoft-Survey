@@ -147,14 +147,22 @@ export async function notifyNewMessage(
     ? message.content.substring(0, 100) + '...' 
     : message.content;
 
-  try {
-    await sendLocalNotification(title, body, {
-      type: 'message',
-      messageId: message.id,
-      senderId: message.senderId,
-    });
-  } catch (error) {
-    console.log('⚠️ Push notification unavailable:', error);
+  // Check each recipient's notification settings
+  for (const recipient of recipients) {
+    const messageType = message.isGroupMessage ? 'groupMessages' : 'directMessages';
+    const shouldNotify = await shouldSendPushNotification(recipient.id, 'messages', messageType);
+    
+    if (shouldNotify) {
+      try {
+        await sendLocalNotification(title, body, {
+          type: 'message',
+          messageId: message.id,
+          senderId: message.senderId,
+        });
+      } catch (error) {
+        console.log('⚠️ Push notification unavailable:', error);
+      }
+    }
   }
 
   try {
@@ -195,14 +203,19 @@ export async function notifyScheduleChange(
   const title = titles[changeType];
   const body = bodies[changeType];
 
-  try {
-    await sendLocalNotification(title, body, {
-      type: 'schedule',
-      scheduleId: schedule.id,
-      changeType,
-    });
-  } catch (error) {
-    console.log('⚠️ Push notification unavailable:', error);
+  // Check employee's notification settings
+  const shouldNotify = await shouldSendPushNotification(employee.id, 'scheduleChanges', changeType);
+  
+  if (shouldNotify) {
+    try {
+      await sendLocalNotification(title, body, {
+        type: 'schedule',
+        scheduleId: schedule.id,
+        changeType,
+      });
+    } catch (error) {
+      console.log('⚠️ Push notification unavailable:', error);
+    }
   }
 
   try {
@@ -225,7 +238,8 @@ export async function notifyScheduleChange(
 // Send urgent alert from managers
 export async function sendUrgentAlert(
   alert: Alert,
-  recipients: Employee[]
+  recipients: Employee[],
+  sender?: Employee
 ): Promise<void> {
   const priorityIcons = {
     low: 'ℹ️',
@@ -237,17 +251,33 @@ export async function sendUrgentAlert(
   const title = `${priorityIcons[alert.priority]} ${alert.title}`;
   const body = alert.message;
 
-  try {
-    // Try to send push notification (may fail on web platform)
-    await sendLocalNotification(title, body, {
-      type: 'alert',
-      alertId: alert.id,
-      priority: alert.priority,
-    });
-    console.log('✅ Push notification sent successfully');
-  } catch (error) {
-    // Push notifications may not work on web - this is expected
-    console.log('⚠️ Push notification unavailable (likely web platform):', error);
+  // Map priority to settings key
+  const priorityKey = `${alert.priority}Priority`;
+
+  // Check each recipient's notification settings
+  for (const recipient of recipients) {
+    const shouldNotify = await shouldSendPushNotification(recipient.id, 'alerts', priorityKey);
+    
+    if (shouldNotify) {
+      try {
+        await sendLocalNotification(title, body, {
+          type: 'alert',
+          alertId: alert.id,
+          priority: alert.priority,
+        });
+      } catch (error) {
+        console.log('⚠️ Push notification unavailable:', error);
+      }
+    }
+  }
+
+  // Send SMS to sender if it's an urgent alert and they have SMS enabled
+  if (sender && alert.priority === 'urgent') {
+    const shouldSMS = await shouldSendSMS(sender.id, 'alerts');
+    if (shouldSMS && sender.phone) {
+      const smsBody = `🚨 URGENT: You sent alert "${alert.title}" to ${recipients.length} employee(s)`;
+      await sendSMS([sender], smsBody);
+    }
   }
 
   try {
@@ -262,7 +292,6 @@ export async function sendUrgentAlert(
       sentAt: new Date().toISOString(),
       deliveryStatus: {},
     });
-    console.log('✅ Notification record saved');
   } catch (error) {
     console.log('⚠️ Failed to save notification record:', error);
   }
@@ -280,26 +309,134 @@ export async function getPushNotifications(): Promise<PushNotification[]> {
   return await StorageService.getData<PushNotification[]>('push_notifications') || [];
 }
 
-// Employee action notifications
+// Get notification settings for a user
+export async function getNotificationSettings(userId: string): Promise<any> {
+  return await StorageService.getData(`notification_settings_${userId}`);
+}
+
+// Check if push notification should be sent based on settings
+export async function shouldSendPushNotification(
+  userId: string,
+  category: string,
+  subcategory?: string
+): Promise<boolean> {
+  const settings = await getNotificationSettings(userId);
+  if (!settings || !settings.pushEnabled) return false;
+  
+  // Check category-specific settings
+  const categorySettings = settings[category];
+  if (!categorySettings || !categorySettings.enabled) return false;
+  
+  // Check subcategory if provided
+  if (subcategory && categorySettings[subcategory] === false) return false;
+  
+  return true;
+}
+
+// Check if SMS should be sent based on settings
+export async function shouldSendSMS(
+  userId: string,
+  eventType: string
+): Promise<boolean> {
+  const settings = await getNotificationSettings(userId);
+  if (!settings || !settings.smsEnabled) return false;
+  if (!settings.smsPhoneNumber) return false;
+  
+  return settings.smsEvents[eventType] === true;
+}
+
+// Employee action notifications with stats
 export async function notifyClockIn(
   employee: Employee,
   store: string,
   managers: Employee[]
 ): Promise<void> {
   const title = '🟢 Employee Clocked In';
-  const body = `${employee.firstName} ${employee.lastName} clocked in at ${store}`;
-  await notifyManagers(managers, title, body, 'clock_in');
+  const storeName = store === 'lowes' ? 'Lowes' : 'Home Depot';
+  const body = `${employee.firstName} ${employee.lastName} clocked in at ${storeName}`;
+  
+  // Check each manager's notification settings
+  for (const manager of managers) {
+    const shouldNotify = await shouldSendPushNotification(manager.id, 'clockEvents', 'clockIn');
+    if (shouldNotify) {
+      await sendLocalNotification(title, body, {
+        type: 'clock_in',
+        employeeId: employee.id,
+        store,
+      });
+    }
+    
+    // Send SMS if enabled
+    const shouldSMS = await shouldSendSMS(manager.id, 'clockIn');
+    if (shouldSMS && manager.phone) {
+      await sendSMS([manager], body);
+    }
+  }
 }
 
 export async function notifyClockOut(
   employee: Employee,
-  hoursWorked: number,
-  surveysCompleted: number,
+  stats: {
+    hoursWorked: number;
+    qualifiedSurveys: number;
+    appointments: number;
+    surveysPerHour: number;
+    appointmentsPerHour: number;
+  },
   managers: Employee[]
 ): Promise<void> {
   const title = '🔴 Employee Clocked Out';
-  const body = `${employee.firstName} ${employee.lastName} clocked out - ${hoursWorked.toFixed(1)}hrs, ${surveysCompleted} surveys`;
-  await notifyManagers(managers, title, body, 'clock_out');
+  
+  // Build notification body with detailed stats
+  const body = `${employee.firstName} ${employee.lastName} clocked out\n\n` +
+    `⏰ Hours: ${stats.hoursWorked.toFixed(1)}hrs\n` +
+    `📋 Surveys: ${stats.qualifiedSurveys}\n` +
+    `📅 Appointments: ${stats.appointments}\n` +
+    `⚡ Surveys/hr: ${stats.surveysPerHour.toFixed(1)}\n` +
+    `⚡ Appts/hr: ${stats.appointmentsPerHour.toFixed(1)}`;
+  
+  // SMS-friendly compact format
+  const smsBody = `${employee.firstName} ${employee.lastName} clocked out: ` +
+    `${stats.hoursWorked.toFixed(1)}hrs, ` +
+    `${stats.qualifiedSurveys} surveys, ` +
+    `${stats.appointments} appts, ` +
+    `${stats.surveysPerHour.toFixed(1)}/hr avg` +
+    (stats.surveysPerHour < 5 ? ' ⚠️ BELOW QUOTA' : ' ✅');
+  
+  // Check each manager's notification settings
+  for (const manager of managers) {
+    const settings = await getNotificationSettings(manager.id);
+    const shouldNotify = await shouldSendPushNotification(manager.id, 'clockEvents', 'clockOut');
+    
+    if (shouldNotify) {
+      // Use detailed stats if enabled, otherwise use simple format
+      const notificationBody = settings?.clockEvents?.showStats ? body : 
+        `${employee.firstName} ${employee.lastName} clocked out - ${stats.hoursWorked.toFixed(1)}hrs, ${stats.qualifiedSurveys} surveys`;
+      
+      await sendLocalNotification(title, notificationBody, {
+        type: 'clock_out',
+        employeeId: employee.id,
+        stats,
+      });
+    }
+    
+    // Send SMS if enabled
+    const shouldSMS = await shouldSendSMS(manager.id, 'clockOut');
+    if (shouldSMS && manager.phone) {
+      await sendSMS([manager], smsBody);
+    }
+    
+    // Send low quota alert if enabled and employee is below quota
+    if (stats.surveysPerHour < 5) {
+      const shouldLowQuotaSMS = await shouldSendSMS(manager.id, 'lowQuota');
+      if (shouldLowQuotaSMS && manager.phone) {
+        const lowQuotaMessage = `⚠️ LOW QUOTA ALERT: ${employee.firstName} ${employee.lastName} ` +
+          `finished with ${stats.surveysPerHour.toFixed(1)}/hr (need 5/hr). ` +
+          `Total: ${stats.qualifiedSurveys} surveys in ${stats.hoursWorked.toFixed(1)}hrs`;
+        await sendSMS([manager], lowQuotaMessage);
+      }
+    }
+  }
 }
 
 export async function notifyBreakStart(
