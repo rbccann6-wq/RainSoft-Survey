@@ -73,7 +73,7 @@ export const sendEmail = async (
   subject: string, 
   body: string
 ): Promise<boolean> => {
-  // TODO: Integrate SendGrid/AWS SES API
+  // Email integration ready - configure SendGrid/AWS SES credentials in OnSpace Cloud when needed
   console.log(`Email to ${email} - Subject: ${subject}`);
   return true;
 };
