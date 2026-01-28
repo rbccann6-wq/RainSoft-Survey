@@ -458,6 +458,15 @@ interface SyncQueueItem {
 
 const MAX_RETRIES = 3;
 
+interface SyncLogItem {
+  type: 'survey' | 'appointment';
+  id: string;
+  name: string;
+  salesforceId?: string;
+  error?: string;
+  status: 'success' | 'failed' | 'duplicate';
+}
+
 export const processSyncQueue = async (
   queue: SyncQueueItem[]
 ): Promise<{ synced: number; failed: number; duplicates: number }> => {
@@ -473,6 +482,7 @@ export const processSyncQueue = async (
   let failedCount = 0;
   let duplicateCount = 0;
   const itemsToKeep: SyncQueueItem[] = [];
+  const syncedItems: SyncLogItem[] = [];
   
   for (const item of queue) {
     try {
@@ -521,6 +531,15 @@ export const processSyncQueue = async (
               };
               await StorageService.saveSurveys(surveys);
             }
+            
+            // Add to detailed sync log
+            syncedItems.push({
+              type: 'survey',
+              id: survey.id,
+              name: `${survey.answers?.contact_info?.firstName || ''} ${survey.answers?.contact_info?.lastName || 'Unknown'}`.trim(),
+              salesforceId: result.duplicateInfo!.salesforceId,
+              status: 'duplicate',
+            });
           } else {
             // Mark as synced and store Salesforce ID
             const surveys = await StorageService.getSurveys() || [];
@@ -531,6 +550,15 @@ export const processSyncQueue = async (
               surveys[surveyIndex].syncError = undefined; // Clear any previous errors
               await StorageService.saveSurveys(surveys);
             }
+            
+            // Add to detailed sync log
+            syncedItems.push({
+              type: 'survey',
+              id: survey.id,
+              name: `${survey.answers?.contact_info?.firstName || ''} ${survey.answers?.contact_info?.lastName || 'Unknown'}`.trim(),
+              salesforceId: result.salesforceId,
+              status: 'success',
+            });
           }
           
           console.log('✅ Survey synced to Salesforce');
@@ -555,6 +583,14 @@ export const processSyncQueue = async (
           await StorageService.saveSurveys(surveys);
         }
         
+        // Add to detailed sync log
+        syncedItems.push({
+          type: 'appointment',
+          id: survey.id,
+          name: `${survey.answers?.contact_info?.firstName || ''} ${survey.answers?.contact_info?.lastName || 'Unknown'}`.trim() + ` - ${appointment.date} ${appointment.time}`,
+          status: 'success',
+        });
+        
         console.log('✅ Appointment sent to Zapier');
         syncedCount++;
       }
@@ -577,6 +613,15 @@ export const processSyncQueue = async (
           }
           await StorageService.saveSurveys(surveys);
         }
+        
+        // Add to detailed sync log
+        syncedItems.push({
+          type: item.type as 'survey' | 'appointment',
+          id: survey.id,
+          name: `${survey.answers?.contact_info?.firstName || ''} ${survey.answers?.contact_info?.lastName || 'Unknown'}`.trim(),
+          error: errorMessage,
+          status: 'failed',
+        });
       }
       
       if (retryCount < MAX_RETRIES) {
@@ -601,13 +646,14 @@ export const processSyncQueue = async (
   // Update sync queue with failed items
   await StorageService.saveData('sync_queue', itemsToKeep);
   
-  // Save sync stats
+  // Save sync stats with detailed items
   await StorageService.addSyncLog({
     timestamp: new Date().toISOString(),
     synced: syncedCount,
     failed: failedCount,
     duplicates: duplicateCount,
     queueSize: itemsToKeep.length,
+    items: syncedItems,
   });
   
   console.log(`✅ Sync complete: ${syncedCount} synced, ${failedCount} failed permanently, ${duplicateCount} duplicates detected`);

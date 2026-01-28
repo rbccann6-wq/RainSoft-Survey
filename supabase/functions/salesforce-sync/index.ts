@@ -27,8 +27,13 @@ async function authenticateSalesforce(): Promise<string> {
   const password = Deno.env.get('SALESFORCE_PASSWORD');
 
   if (!instanceUrl || !clientId || !clientSecret || !username || !password) {
-    throw new Error('Missing Salesforce credentials in environment variables');
+    throw new Error('Missing Salesforce credentials in Cloud Secrets. Please configure: SALESFORCE_INSTANCE_URL, SALESFORCE_CLIENT_ID, SALESFORCE_CLIENT_SECRET, SALESFORCE_USERNAME, SALESFORCE_PASSWORD');
   }
+  
+  console.log('🔐 Authenticating with Salesforce...');
+  console.log('   Instance URL:', instanceUrl);
+  console.log('   Username:', username);
+  console.log('   Password length:', password.length);
 
   const tokenUrl = `${instanceUrl}/services/oauth2/token`;
 
@@ -48,6 +53,26 @@ async function authenticateSalesforce(): Promise<string> {
 
   if (!response.ok) {
     const errorText = await response.text();
+    
+    // Check for invalid_grant error (most common)
+    if (errorText.includes('invalid_grant') || errorText.includes('authentication failure')) {
+      throw new Error(
+        `Salesforce authentication failed. Common causes:\n\n` +
+        `1. MISSING SECURITY TOKEN - Your SALESFORCE_PASSWORD must be: password + security token (no spaces)\n` +
+        `   Example: If password is 'MyPass123' and token is 'AbCdEfGh1234', enter: MyPass123AbCdEfGh1234\n\n` +
+        `2. Get your security token:\n` +
+        `   - Log into Salesforce → Profile Icon → Settings\n` +
+        `   - Search 'Reset My Security Token'\n` +
+        `   - Check email for token\n` +
+        `   - Combine: password + token (NO SPACE)\n\n` +
+        `3. Update in OnSpace Cloud:\n` +
+        `   - Click 'Cloud' → 'Secrets' tab\n` +
+        `   - Edit SALESFORCE_PASSWORD\n` +
+        `   - Enter: yourPassword123yourSecurityToken\n\n` +
+        `Technical error: ${response.status} - ${errorText}`
+      );
+    }
+    
     throw new Error(`Salesforce auth failed: ${response.status} - ${errorText}`);
   }
 

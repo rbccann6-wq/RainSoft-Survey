@@ -11,12 +11,22 @@ import { Button } from '@/components/ui/Button';
 import { SPACING, FONTS, LOWES_THEME } from '@/constants/theme';
 import { Survey } from '@/types';
 
+interface SyncLogItem {
+  type: 'survey' | 'appointment';
+  id: string;
+  name: string;
+  salesforceId?: string;
+  error?: string;
+  status: 'success' | 'failed' | 'duplicate';
+}
+
 interface SyncLog {
   timestamp: string;
   synced: number;
   failed: number;
   duplicates: number;
   queueSize: number;
+  items?: SyncLogItem[];
 }
 
 interface FailedSyncItem {
@@ -518,6 +528,52 @@ export default function SyncDashboardScreen() {
                       <Text style={styles.logStatText}>{log.duplicates}</Text>
                     </View>
                   </View>
+                  
+                  {/* Detailed Items */}
+                  {log.items && log.items.length > 0 && (
+                    <View style={styles.logDetails}>
+                      {log.items.map((item, idx) => (
+                        <View key={idx} style={styles.logDetailItem}>
+                          <MaterialIcons
+                            name={
+                              item.status === 'success' ? 'check-circle' :
+                              item.status === 'duplicate' ? 'content-copy' :
+                              'error'
+                            }
+                            size={14}
+                            color={
+                              item.status === 'success' ? LOWES_THEME.success :
+                              item.status === 'duplicate' ? '#9C27B0' :
+                              LOWES_THEME.error
+                            }
+                          />
+                          <View style={styles.logDetailInfo}>
+                            <Text style={styles.logDetailName} numberOfLines={1}>
+                              {item.name}
+                            </Text>
+                            {item.salesforceId && (
+                              <Text style={styles.logDetailSF} numberOfLines={1}>
+                                SF: {item.salesforceId}
+                              </Text>
+                            )}
+                            {item.error && (
+                              <Text style={styles.logDetailError} numberOfLines={1}>
+                                {item.error}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={[
+                            styles.logDetailBadge,
+                            item.type === 'survey' ? styles.surveyBadge : styles.appointmentBadge
+                          ]}>
+                            <Text style={styles.logDetailBadgeText}>
+                              {item.type === 'survey' ? 'Survey' : 'Appt'}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -982,6 +1038,53 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
     color: LOWES_THEME.text,
+  },
+  logDetails: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: LOWES_THEME.border,
+    gap: SPACING.xs,
+  },
+  logDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: 4,
+  },
+  logDetailInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  logDetailName: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    color: LOWES_THEME.text,
+  },
+  logDetailSF: {
+    fontSize: FONTS.sizes.xs,
+    color: LOWES_THEME.primary,
+    fontFamily: 'monospace',
+  },
+  logDetailError: {
+    fontSize: FONTS.sizes.xs,
+    color: LOWES_THEME.error,
+  },
+  logDetailBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  logDetailBadgeText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  surveyBadge: {
+    backgroundColor: LOWES_THEME.primary,
+  },
+  appointmentBadge: {
+    backgroundColor: '#FF6B35',
   },
   failedList: {
     gap: SPACING.sm,

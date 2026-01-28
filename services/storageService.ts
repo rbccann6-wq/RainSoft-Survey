@@ -1019,12 +1019,22 @@ export const getLocalSurveyCount = async (): Promise<number> => {
 
 // ============ SYNC LOGS ============
 
+interface SyncLogItem {
+  type: 'survey' | 'appointment';
+  id: string;
+  name: string; // Customer name or identifier
+  salesforceId?: string;
+  error?: string;
+  status: 'success' | 'failed' | 'duplicate';
+}
+
 interface SyncLog {
   timestamp: string;
   synced: number;
   failed: number;
   duplicates: number;
   queueSize: number;
+  items?: SyncLogItem[]; // Detailed list of what was synced
 }
 
 const SYNC_LOGS_KEY = 'sync_logs';
