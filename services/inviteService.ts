@@ -68,12 +68,32 @@ export const sendSMS = async (phone: string, message: string): Promise<boolean> 
   }
 };
 
+// Send email via SendGrid Edge Function
 export const sendEmail = async (
   email: string, 
   subject: string, 
-  body: string
+  body: string,
+  isHtml: boolean = false
 ): Promise<boolean> => {
-  // Email integration ready - configure SendGrid/AWS SES credentials in OnSpace Cloud when needed
-  console.log(`Email to ${email} - Subject: ${subject}`);
-  return true;
+  try {
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: { to: email, subject, body, isHtml },
+    });
+
+    if (error) {
+      console.error('Email Error:', error);
+      return false;
+    }
+
+    if (data?.success) {
+      console.log('✅ Email sent successfully');
+      return true;
+    } else {
+      console.error('Email failed:', data?.error);
+      return false;
+    }
+  } catch (error) {
+    console.error('Failed to send email:', error);
+    return false;
+  }
 };
