@@ -382,6 +382,11 @@ export const sendToZapier = async (data: {
     console.log('🔄 [ZAPIER] Survey ID:', data.survey.id);
     console.log('🔄 [ZAPIER] Appointment data:', JSON.stringify(data.appointment, null, 2));
     
+    // Determine store-specific values (same as Salesforce mapping)
+    const isLowes = data.survey.store === 'lowes';
+    const leadSource = isLowes ? 'Lowes' : 'HDS';
+    const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
+    
     // Prepare webhook payload
     const payload = {
       // Survey questions and answers
@@ -396,13 +401,13 @@ export const sendToZapier = async (data: {
       // Contact information
       first_name: data.survey.answers.contact_info?.firstName || '',
       last_name: data.survey.answers.contact_info?.lastName || '',
-      phone: data.survey.answers.contact_info?.phone || '', // Corrected line
+      phone: data.survey.answers.contact_info?.phone || '',
       email: data.appointment.email || '',
       spouse_first_name: data.appointment.spouseName || '',
       address: data.appointment.address,
       city: data.survey.answers.contact_info?.city || '',
       state: data.survey.answers.contact_info?.state || '',
-      zip_code: data.survey.answers.contact_info?.zipCode || '', // Corrected line
+      zip_code: data.survey.answers.contact_info?.zipCode || '',
       
       // Appointment details
       appointment_date: data.appointment.date,
@@ -410,7 +415,9 @@ export const sendToZapier = async (data: {
       appointment_notes: data.appointment.notes || '',
       
       // Metadata
-      store: data.survey.store === 'lowes' ? 'Lowes' : 'Home Depot',
+      store: isLowes ? 'Lowes' : 'Home Depot',
+      lead_source: leadSource,
+      gift: giftValue,
       survey_date: data.survey.timestamp,
       employee_id: data.survey.employeeId,
       employee_alias: data.survey.employeeAlias || '',
