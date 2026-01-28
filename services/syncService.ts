@@ -398,6 +398,7 @@ export const sendToZapier = async (data: {
       last_name: data.survey.answers.contact_info?.lastName || '',
       phone: data.survey.answers.contact_info?.phone || '', // Corrected line
       email: data.appointment.email || '',
+      spouse_first_name: data.appointment.spouseName || '',
       address: data.appointment.address,
       city: data.survey.answers.contact_info?.city || '',
       state: data.survey.answers.contact_info?.state || '',

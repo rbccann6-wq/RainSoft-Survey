@@ -88,6 +88,7 @@ export interface Survey {
 export interface Appointment {
   address: string;
   email: string;
+  spouseName?: string;
   date: string;
   time: string;
   notes?: string;

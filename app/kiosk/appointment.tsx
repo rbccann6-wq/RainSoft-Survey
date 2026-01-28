@@ -28,6 +28,7 @@ export default function AppointmentScreen() {
   
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
+  const [spouseName, setSpouseName] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
   const [selectedTime, setSelectedTime] = useState('');
@@ -76,6 +77,7 @@ export default function AppointmentScreen() {
         time: selectedTime,
         notes,
         email,
+        spouseName: spouseName.trim() || undefined,
       };
 
       const completeSurvey: Survey = {
@@ -264,6 +266,18 @@ export default function AppointmentScreen() {
             placeholder="customer@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
+            borderColor={theme.primary}
+          />
+        </View>
+
+        {/* Spouse First Name (Optional) */}
+        <View style={styles.inputGroup}>
+          <Input
+            label="Spouse First Name (Optional)"
+            value={spouseName}
+            onChangeText={setSpouseName}
+            placeholder="Spouse's first name"
+            autoCapitalize="words"
             borderColor={theme.primary}
           />
         </View>
