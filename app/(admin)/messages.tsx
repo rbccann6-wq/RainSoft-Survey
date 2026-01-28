@@ -68,7 +68,7 @@ export default function AdminMessagesScreen() {
   const handleSendMessage = async () => {
     const text = messageText.trim();
     if (!text) {
-      showAlert('Please enter a message', 'error');
+      showAlert('Error', 'Please enter a message');
       return;
     }
     
@@ -82,7 +82,7 @@ export default function AdminMessagesScreen() {
       isGroup = selectedRecipients.includes('group');
       recipientIds = isGroup ? [] : selectedRecipients;
     } else {
-      showAlert('Please select a recipient', 'error');
+      showAlert('Error', 'Please select a recipient');
       return;
     }
 
@@ -99,18 +99,29 @@ export default function AdminMessagesScreen() {
         isGroupMessage: isGroup,
       };
 
+      console.log('📤 Sending message:', message);
       await StorageService.addMessage(message);
+      console.log('✅ Message saved to storage');
       
-      const NotificationService = await import('@/services/notificationService');
-      const recipients = isGroup 
-        ? employees.filter(e => e.id !== currentUser!.id && e.status === 'active')
-        : employees.filter(e => recipientIds.includes(e.id));
-      
-      if (recipients.length > 0) {
-        await NotificationService.notifyNewMessage(message, recipients);
+      try {
+        const NotificationService = await import('@/services/notificationService');
+        const recipients = isGroup 
+          ? employees.filter(e => e.id !== currentUser!.id && e.status === 'active')
+          : employees.filter(e => recipientIds.includes(e.id));
+        
+        console.log('📢 Sending notifications to:', recipients.length, 'recipients');
+        if (recipients.length > 0) {
+          await NotificationService.notifyNewMessage(message, recipients);
+          console.log('✅ Notifications sent');
+        }
+      } catch (notifError) {
+        console.warn('⚠️ Notification failed (non-critical):', notifError);
+        // Don't fail the whole send if just notifications fail
       }
       
       await loadData();
+      console.log('✅ Data reloaded');
+      
       setMessageText('');
       Keyboard.dismiss();
       
@@ -121,9 +132,11 @@ export default function AdminMessagesScreen() {
       }
       
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      console.log('✅ Message sent successfully');
     } catch (error) {
-      console.error('Send message error:', error);
-      showAlert('Failed to send message', 'error');
+      console.error('❌ Send message error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      showAlert('Send Failed', `Could not send message: ${errorMessage}`);
     }
   };
 
