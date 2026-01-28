@@ -110,6 +110,13 @@ export default function AdminDashboard() {
       title: 'Survey & Data',
       items: [
         {
+          icon: 'analytics',
+          label: 'Analytics Dashboard',
+          route: '/(admin)/analytics',
+          color: '#673AB7',
+          description: 'Metrics & insights',
+        },
+        {
           icon: 'assessment',
           label: 'Surveys',
           route: '/(admin)/surveys',
@@ -120,7 +127,7 @@ export default function AdminDashboard() {
           icon: 'timeline',
           label: 'Survey Stats',
           route: '/(admin)/survey-stats-config',
-          color: '#673AB7',
+          color: '#8BC34A',
           description: 'Configure statistics',
         },
         {
@@ -142,6 +149,13 @@ export default function AdminDashboard() {
     {
       title: 'System',
       items: [
+        {
+          icon: 'file-download',
+          label: 'Time Clock Export',
+          route: '/(admin)/time-clock-export',
+          color: '#00BCD4',
+          description: 'Export payroll data',
+        },
         {
           icon: 'sync',
           label: 'Sync Status',
