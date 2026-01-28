@@ -39,6 +39,7 @@ export default function SurveyScreen() {
   const [activeTimeEntryId, setActiveTimeEntryId] = useState<string | null>(null);
   const lastQuestionChangeRef = useRef<Date>(new Date());
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [numberValue, setNumberValue] = useState('');
 
   // Get active time entry ID
   React.useEffect(() => {
@@ -380,6 +381,7 @@ export default function SurveyScreen() {
           setCity('');
           setState('');
           setZipLookupError('');
+          setNumberValue('');
         },
       },
     ]);
@@ -482,6 +484,7 @@ export default function SurveyScreen() {
             setCity('');
             setState('');
             setZipLookupError('');
+            setNumberValue('');
           } catch (err) {
             console.error('❌ Survey submission error:', err);
             showAlert('Error', 'Failed to save survey. Please try again.');
@@ -545,6 +548,7 @@ export default function SurveyScreen() {
               setCity('');
               setState('');
               setZipLookupError('');
+              setNumberValue('');
             },
           },
         ]
@@ -571,6 +575,7 @@ export default function SurveyScreen() {
               setCity('');
               setState('');
               setZipLookupError('');
+              setNumberValue('');
             },
           },
         ]
@@ -630,7 +635,6 @@ export default function SurveyScreen() {
         );
 
       case 'number':
-        const [numberValue, setNumberValue] = React.useState(answer?.toString() || '');
         return (
           <View style={styles.inputContainer}>
             <Input
@@ -649,6 +653,7 @@ export default function SurveyScreen() {
               onPress={() => {
                 if (numberValue && parseInt(numberValue) > 0) {
                   handleAnswer(parseInt(numberValue));
+                  setNumberValue(''); // Reset after answering
                 } else {
                   showAlert('Invalid Input', 'Please enter a valid number');
                 }
