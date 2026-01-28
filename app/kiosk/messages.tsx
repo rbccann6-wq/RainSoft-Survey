@@ -1,10 +1,11 @@
 // Modern iPhone Messages-style UI for employee messaging
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useApp } from '@/hooks/useApp';
+import { useAlert } from '@/template';
 import * as StorageService from '@/services/storageService';
 import { SPACING, FONTS, LOWES_THEME } from '@/constants/theme';
 import { Message } from '@/types';
@@ -13,8 +14,11 @@ export default function MessagesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { currentUser, employees, messages, loadData } = useApp();
+  const { showAlert } = useAlert();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
+  const [showCompose, setShowCompose] = useState(false);
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const flatListRef = useRef<FlatList>(null);
 
   const myMessages = messages.filter(m => 
@@ -69,29 +73,74 @@ export default function MessagesScreen() {
   }, [selectedConversation]);
 
   const sendMessage = async () => {
-    if (!messageText.trim() || !selectedConversation) return;
+    if (!messageText.trim()) return;
+    
+    let recipientIds: string[] = [];
+    let isGroup = false;
+    
+    if (selectedConversation) {
+      // Reply to existing conversation
+      isGroup = selectedConversation === 'group';
+      recipientIds = isGroup ? [] : [selectedConversation];
+    } else if (showCompose && selectedRecipients.length > 0) {
+      // New message from compose
+      isGroup = selectedRecipients.includes('group');
+      recipientIds = isGroup ? [] : selectedRecipients;
+    } else {
+      return;
+    }
 
     const message: Message = {
       id: Date.now().toString(),
       senderId: currentUser!.id,
       senderName: `${currentUser!.firstName} ${currentUser!.lastName}`,
-      recipientIds: selectedConversation === 'group' ? [] : [selectedConversation],
+      recipientIds,
       content: messageText.trim(),
       timestamp: new Date().toISOString(),
       readBy: [currentUser!.id],
       reactions: {},
-      isGroupMessage: selectedConversation === 'group',
+      isGroupMessage: isGroup,
     };
 
     await StorageService.addMessage(message);
+    
+    // Send notifications
+    const NotificationService = await import('@/services/notificationService');
+    const recipients = isGroup 
+      ? employees.filter(e => e.id !== currentUser!.id && e.status === 'active')
+      : employees.filter(e => recipientIds.includes(e.id));
+    
+    if (recipients.length > 0) {
+      await NotificationService.notifyNewMessage(message, recipients);
+    }
+    
     await loadData();
     setMessageText('');
     Keyboard.dismiss();
+    
+    if (showCompose) {
+      setShowCompose(false);
+      setSelectedRecipients([]);
+      setSelectedConversation(isGroup ? 'group' : recipientIds[0]);
+    }
     
     // Scroll to bottom after sending
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
+  };
+
+  const toggleRecipient = (id: string) => {
+    if (id === 'group') {
+      setSelectedRecipients(['group']);
+    } else {
+      const withoutGroup = selectedRecipients.filter(r => r !== 'group');
+      if (withoutGroup.includes(id)) {
+        setSelectedRecipients(withoutGroup.filter(r => r !== id));
+      } else {
+        setSelectedRecipients([...withoutGroup, id]);
+      }
+    }
   };
 
   const formatTime = (timestamp: string) => {
@@ -110,6 +159,110 @@ export default function MessagesScreen() {
     
     return `${displayHours}:${minutes} ${ampm}`;
   };
+
+  // Compose New Message View
+  if (showCompose) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.conversationHeader}>
+            <Pressable 
+              onPress={() => {
+                setShowCompose(false);
+                setSelectedRecipients([]);
+                setMessageText('');
+              }} 
+              style={styles.cancelButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+            
+            <Text style={styles.composeTitle}>New Message</Text>
+            
+            <Pressable 
+              onPress={() => {
+                if (messageText.trim() && selectedRecipients.length > 0) {
+                  sendMessage();
+                }
+              }}
+              style={styles.sendHeaderButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={[
+                styles.sendHeaderText,
+                (!messageText.trim() || selectedRecipients.length === 0) && styles.sendHeaderTextDisabled
+              ]}>
+                Send
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.composeScroll}>
+            <View style={styles.recipientsSection}>
+              <Text style={styles.recipientsLabel}>To:</Text>
+              
+              <Pressable
+                style={[
+                  styles.recipientChip,
+                  selectedRecipients.includes('group') && styles.recipientChipSelected
+                ]}
+                onPress={() => toggleRecipient('group')}
+              >
+                <MaterialIcons 
+                  name="group" 
+                  size={16} 
+                  color={selectedRecipients.includes('group') ? '#FFFFFF' : '#007AFF'} 
+                />
+                <Text style={[
+                  styles.recipientChipText,
+                  selectedRecipients.includes('group') && styles.recipientChipTextSelected
+                ]}>
+                  All Employees
+                </Text>
+              </Pressable>
+              
+              {employees
+                .filter(e => e.id !== currentUser!.id && e.status === 'active')
+                .map(emp => (
+                  <Pressable
+                    key={emp.id}
+                    style={[
+                      styles.recipientChip,
+                      selectedRecipients.includes(emp.id) && styles.recipientChipSelected
+                    ]}
+                    onPress={() => toggleRecipient(emp.id)}
+                  >
+                    <Text style={[
+                      styles.recipientChipText,
+                      selectedRecipients.includes(emp.id) && styles.recipientChipTextSelected
+                    ]}>
+                      {emp.firstName} {emp.lastName}
+                    </Text>
+                  </Pressable>
+                ))}
+            </View>
+
+            <View style={styles.composeDivider} />
+
+            <TextInput
+              style={styles.composeInput}
+              value={messageText}
+              onChangeText={setMessageText}
+              placeholder="Message"
+              placeholderTextColor="#8E8E93"
+              multiline
+              maxLength={1000}
+              autoFocus
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   // Conversation View
   if (selectedConversation) {
@@ -222,8 +375,11 @@ export default function MessagesScreen() {
               />
               
               <Pressable
-                onPress={sendMessage}
-                disabled={!messageText.trim()}
+                onPress={() => {
+                  if (messageText.trim()) {
+                    sendMessage();
+                  }
+                }}
                 style={[
                   styles.sendButton,
                   !messageText.trim() && styles.sendButtonDisabled
@@ -294,7 +450,13 @@ export default function MessagesScreen() {
         
         <Text style={styles.listTitle}>Messages</Text>
         
-        <View style={styles.headerRight} />
+        <Pressable 
+          onPress={() => setShowCompose(true)}
+          style={styles.composeButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialIcons name="create" size={24} color="#007AFF" />
+        </Pressable>
       </View>
 
       {conversationsList.length === 0 ? (
@@ -409,6 +571,87 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     width: 80,
+  },
+  composeButton: {
+    padding: SPACING.xs,
+    width: 80,
+    alignItems: 'flex-end',
+  },
+  cancelButton: {
+    paddingHorizontal: SPACING.sm,
+    width: 80,
+  },
+  cancelText: {
+    fontSize: 17,
+    color: '#007AFF',
+  },
+  composeTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000000',
+    flex: 1,
+    textAlign: 'center',
+  },
+  sendHeaderButton: {
+    paddingHorizontal: SPACING.sm,
+    width: 80,
+    alignItems: 'flex-end',
+  },
+  sendHeaderText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  sendHeaderTextDisabled: {
+    color: '#8E8E93',
+  },
+  composeScroll: {
+    flex: 1,
+  },
+  recipientsSection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: SPACING.md,
+    gap: SPACING.sm,
+    alignItems: 'center',
+  },
+  recipientsLabel: {
+    fontSize: 17,
+    color: '#8E8E93',
+    marginRight: SPACING.xs,
+  },
+  recipientChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    backgroundColor: '#FFFFFF',
+  },
+  recipientChipSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  recipientChipText: {
+    fontSize: 15,
+    color: '#007AFF',
+  },
+  recipientChipTextSelected: {
+    color: '#FFFFFF',
+  },
+  composeDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#C6C6C8',
+  },
+  composeInput: {
+    padding: SPACING.lg,
+    fontSize: 17,
+    color: '#000000',
+    minHeight: 200,
+    textAlignVertical: 'top',
   },
   conversationsContent: {
     paddingBottom: SPACING.lg,

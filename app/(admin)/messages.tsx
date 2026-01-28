@@ -357,8 +357,11 @@ export default function AdminMessagesScreen() {
               />
               
               <Pressable
-                onPress={sendMessage}
-                disabled={!messageText.trim()}
+                onPress={() => {
+                  if (messageText.trim()) {
+                    sendMessage();
+                  }
+                }}
                 style={[
                   styles.sendButton,
                   !messageText.trim() && styles.sendButtonDisabled

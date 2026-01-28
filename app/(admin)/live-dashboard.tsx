@@ -36,7 +36,7 @@ export default function LiveDashboard() {
   const loadClockedInEmployees = async () => {
     const employees = await getClockedInEmployees();
     
-    // Enhanced: Check for actual inactivity based on last survey/activity
+    // Enhanced: Check for actual inactivity based on last survey/activity + "Not in app" detection
     const now = Date.now();
     const inactivityThreshold = 15 * 60 * 1000; // 15 minutes
     
@@ -50,23 +50,29 @@ export default function LiveDashboard() {
       
       // Get last activity time
       let lastActivityTime: number;
+      let activitySource = 'clock_in';
+      
       if (employeeSurveysToday.length > 0) {
         // Use last survey time as last activity
         const lastSurvey = employeeSurveysToday.sort((a, b) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         )[0];
         lastActivityTime = new Date(lastSurvey.timestamp).getTime();
+        activitySource = 'survey';
       } else {
         // Use clock in time if no surveys
         lastActivityTime = new Date(emp.timeEntry.clockIn).getTime();
+        activitySource = 'clock_in';
       }
       
       const inactiveMinutes = Math.floor((now - lastActivityTime) / (1000 * 60));
       const isInactive = (now - lastActivityTime) > inactivityThreshold;
+      const notInApp = activitySource === 'clock_in' && inactiveMinutes >= 5; // No surveys = not in app
       
       return {
         ...emp,
         isInactive,
+        notInApp,
         inactiveMinutes,
       };
     });
@@ -283,19 +289,19 @@ export default function LiveDashboard() {
                     style={[
                       styles.statusBadge,
                       {
-                        backgroundColor: isInactive
+                        backgroundColor: (isInactive || notInApp)
                           ? '#FF9800'
                           : '#4CAF50',
                       },
                     ]}
                   >
                     <MaterialIcons
-                      name={isInactive ? 'pause-circle-outline' : 'check-circle'}
+                      name={(isInactive || notInApp) ? 'pause-circle-outline' : 'check-circle'}
                       size={16}
                       color="#FFFFFF"
                     />
                     <Text style={styles.statusText}>
-                      {isInactive ? `INACTIVE ${inactiveMinutes}m` : 'ACTIVE'}
+                      {notInApp ? 'NOT IN APP' : isInactive ? `INACTIVE ${inactiveMinutes}m` : 'ACTIVE'}
                     </Text>
                   </View>
                 </View>

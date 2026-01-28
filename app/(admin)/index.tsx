@@ -44,22 +44,46 @@ export default function AdminDashboard() {
     timeEntries.some(te => te.employeeId === emp.id && !te.clockOut)
   );
   
-  // Check for inactive employees (no activity in last 30 minutes)
+  // Check for inactive employees using same logic as activity monitor
   const now = Date.now();
-  const inactiveThreshold = 30 * 60 * 1000; // 30 minutes
+  const inactiveThreshold = 15 * 60 * 1000; // 15 minutes
   
   const employeeStatus = clockedInEmployees.map(emp => {
     const latestEntry = timeEntries
       .filter(te => te.employeeId === emp.id && !te.clockOut)
       .sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime())[0];
     
-    const lastActivity = latestEntry ? new Date(latestEntry.clockIn).getTime() : 0;
-    const isInactive = now - lastActivity > inactiveThreshold;
+    // Get last activity from surveys
+    const today = new Date().toISOString().split('T')[0];
+    const employeeSurveysToday = surveys.filter(s => 
+      s.employeeId === emp.id && 
+      s.timestamp.startsWith(today)
+    );
+    
+    let lastActivityTime: number;
+    let activitySource = 'clock_in';
+    
+    if (employeeSurveysToday.length > 0) {
+      const lastSurvey = employeeSurveysToday.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0];
+      lastActivityTime = new Date(lastSurvey.timestamp).getTime();
+      activitySource = 'survey';
+    } else {
+      lastActivityTime = latestEntry ? new Date(latestEntry.clockIn).getTime() : 0;
+      activitySource = 'clock_in';
+    }
+    
+    const inactiveDuration = Math.floor((now - lastActivityTime) / (1000 * 60));
+    const isInactive = (now - lastActivityTime) > inactiveThreshold;
+    const notInApp = activitySource === 'clock_in' && inactiveDuration >= 5; // No surveys = not in app
     
     return {
       ...emp,
       isInactive,
-      lastActivity: latestEntry?.clockIn,
+      notInApp,
+      inactiveDuration,
+      lastActivity: new Date(lastActivityTime).toISOString(),
       store: latestEntry?.store,
     };
   });
@@ -318,10 +342,12 @@ export default function AdminDashboard() {
                       </Text>
                     </View>
                     
-                    {emp.isInactive && (
+                    {(emp.isInactive || emp.notInApp) && (
                       <View style={styles.inactiveBadge}>
                         <MaterialIcons name="warning" size={12} color="#F44336" />
-                        <Text style={styles.inactiveBadgeText}>Inactive 30+ min</Text>
+                        <Text style={styles.inactiveBadgeText}>
+                          {emp.notInApp ? 'Not in app' : `Inactive ${emp.inactiveDuration}m`}
+                        </Text>
                       </View>
                     )}
                   </View>
