@@ -629,6 +629,38 @@ export default function SurveyScreen() {
           </View>
         );
 
+      case 'number':
+        const [numberValue, setNumberValue] = React.useState(answer?.toString() || '');
+        return (
+          <View style={styles.inputContainer}>
+            <Input
+              value={numberValue}
+              onChangeText={(text) => {
+                // Only allow numbers
+                const numericValue = text.replace(/[^0-9]/g, '');
+                setNumberValue(numericValue);
+              }}
+              placeholder={currentQuestion.placeholder || 'Enter number'}
+              keyboardType="number-pad"
+              borderColor={theme.primary}
+            />
+            <Button
+              title="Continue"
+              onPress={() => {
+                if (numberValue && parseInt(numberValue) > 0) {
+                  handleAnswer(parseInt(numberValue));
+                } else {
+                  showAlert('Invalid Input', 'Please enter a valid number');
+                }
+              }}
+              backgroundColor={theme.primary}
+              size="large"
+              fullWidth
+              disabled={!numberValue || parseInt(numberValue) <= 0}
+            />
+          </View>
+        );
+
 
 
       case 'contact':

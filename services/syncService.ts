@@ -136,6 +136,9 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
   // Map tastes/odors answer to backend format
   const tastesOdorsValue = answers.tastes_odors === 'Yes' ? 'tastes, odors' : 'no problems';
   
+  // Map filters answer to backend format
+  const filtersValue = answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
+  
   // If no custom mappings, use defaults
   if (!customMappings || customMappings.length === 0) {
     return {
@@ -148,11 +151,12 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
       PostalCode: answers.contact_info?.zipCode || '',
       Buys_Bottled_Water__c: answers.buys_bottled_water === 'Yes',
       Is_Homeowner__c: answers.is_homeowner === 'Yes',
-      Uses_Filters__c: answers.uses_filters === 'Yes',
+      Uses_Filters__c: filtersValue,
       Tastes_Odors__c: tastesOdorsValue,
       Water_Quality__c: answers.water_quality,
       Water_Source__c: answers.water_source,
       Property_Type__c: answers.property_type,
+      People_In_Home__c: answers.people_in_home || 0,
       Survey_Store__c: isLowes ? 'Lowes' : 'Home Depot',
       Survey_Date__c: survey.timestamp,
       Survey_Employee_ID__c: survey.employeeId,
@@ -198,6 +202,11 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
       // Special handling for tastes_odors field
       if (surveyField === 'tastes_odors') {
         value = value === 'Yes' ? 'tastes, odors' : 'no problems';
+      }
+      
+      // Special handling for uses_filters field
+      if (surveyField === 'uses_filters') {
+        value = value === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
       }
       
       // Special handling for state field - always use abbreviation
@@ -387,15 +396,22 @@ export const sendToZapier = async (data: {
     const leadSource = isLowes ? 'Lowes' : 'HDS';
     const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
     
+    // Format tastes/odors for Zapier
+    const tastesOdorsForZapier = data.survey.answers.tastes_odors === 'Yes' ? 'Yes - Tastes, Odors' : 'No - No Problems';
+    
+    // Format filters for Zapier
+    const filtersForZapier = data.survey.answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
+    
     // Prepare webhook payload
     const payload = {
       // Survey questions and answers
       buys_bottled_water: data.survey.answers.buys_bottled_water,
       is_homeowner: data.survey.answers.is_homeowner,
-      has_salt_system: data.survey.answers.has_salt_system,
+      uses_filters: filtersForZapier,
+      tastes_odors: tastesOdorsForZapier,
+      people_in_home: data.survey.answers.people_in_home || 0,
       water_quality: data.survey.answers.water_quality,
       water_source: data.survey.answers.water_source,
-      current_treatment: data.survey.answers.current_treatment,
       property_type: data.survey.answers.property_type,
       
       // Contact information

@@ -8,7 +8,8 @@ export type QuestionType =
   | 'signature'
   | 'datetime'
   | 'address'
-  | 'contact';
+  | 'contact'
+  | 'number';
 
 export interface SurveyQuestion {
   id: string;
@@ -50,7 +51,7 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   },
   {
     id: 'uses_filters',
-    question: 'Do you use any filters?',
+    question: 'Do you use any filters on your drinking water?',
     type: 'yesno',
     required: true,
   },
@@ -63,9 +64,9 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   {
     id: 'people_in_home',
     question: 'How many people in your home use the water on a daily basis?',
-    type: 'choice',
-    options: ['1-2', '3-4', '5-6', '7+'],
+    type: 'number',
     required: true,
+    placeholder: 'Enter number',
   },
   {
     id: 'property_type',
