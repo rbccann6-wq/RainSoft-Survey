@@ -371,7 +371,7 @@ export const syncToSalesforce = async (
 // ZAPIER WEBHOOK INTEGRATION
 // ============================================================
 
-// Send appointment to Zapier
+// Send appointment to Zapier with enhanced error detection
 export const sendToZapier = async (data: {
   survey: Survey;
   appointment: Appointment;
@@ -438,15 +438,56 @@ export const sendToZapier = async (data: {
     console.log('📶 [ZAPIER] Response status:', response.status);
     console.log('📶 [ZAPIER] Response OK:', response.ok);
     
+    // Check HTTP status first
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('❌ [ZAPIER] HTTP Error - Status:', response.status);
       console.error('❌ [ZAPIER] Error response body:', errorText);
-      throw new Error(`Zapier webhook failed: ${response.status} - ${errorText}`);
+      throw new Error(`Zapier webhook HTTP error: ${response.status} - ${errorText}`);
     }
 
+    // Parse response body to check for Zapier-specific errors
     const responseText = await response.text();
-    console.log('✅ [ZAPIER] Success response:', responseText);
-    console.log('✅ [ZAPIER] Appointment sent to Zapier successfully');
+    console.log('📄 [ZAPIER] Raw response:', responseText);
+    
+    // Zapier webhooks can return 200 but still have errors
+    // Common error patterns:
+    // 1. "paused": Zap is paused
+    // 2. "error": Generic error in response
+    // 3. Empty response: Usually OK for Zapier
+    // 4. JSON with status field
+    
+    const responseLower = responseText.toLowerCase();
+    
+    // Check for "paused" indicator
+    if (responseLower.includes('paused') || responseLower.includes('disabled')) {
+      console.error('❌ [ZAPIER] Zap is paused or disabled');
+      throw new Error('Zapier webhook accepted but Zap is PAUSED or DISABLED - enable the Zap in Zapier dashboard');
+    }
+    
+    // Try parsing as JSON to check for error fields
+    try {
+      const jsonResponse = JSON.parse(responseText);
+      
+      // Check for error indicators in JSON response
+      if (jsonResponse.status === 'error' || jsonResponse.error) {
+        const errorMsg = jsonResponse.error || jsonResponse.message || 'Unknown Zapier error';
+        console.error('❌ [ZAPIER] Error in response JSON:', errorMsg);
+        throw new Error(`Zapier webhook error: ${errorMsg}`);
+      }
+      
+      // Check for success indicators
+      if (jsonResponse.status === 'success' || jsonResponse.id) {
+        console.log('✅ [ZAPIER] Confirmed success via JSON response:', jsonResponse.id || 'OK');
+      }
+    } catch (parseError) {
+      // Not JSON - that's usually OK for Zapier webhooks (they often return plain text)
+      console.log('ℹ️ [ZAPIER] Response is not JSON (this is normal for Zapier)');
+    }
+    
+    // If we got here, the webhook was accepted
+    console.log('✅ [ZAPIER] Webhook accepted successfully');
+    console.log('✅ [ZAPIER] Response: "' + responseText.substring(0, 100) + (responseText.length > 100 ? '..."' : '"'));
     return true;
   } catch (error) {
     console.error('❌ [ZAPIER] Webhook error:', error);

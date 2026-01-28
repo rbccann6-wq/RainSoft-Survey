@@ -177,19 +177,33 @@ export default function SurveysScreen() {
       
       // Show result based on ACTUAL updated status
       if (result.synced > 0 && updatedSurvey) {
-        const stillFailed = 
-          (survey.category === 'appointment' && (!updatedSurvey.syncedToSalesforce || !updatedSurvey.syncedToZapier)) ||
-          (survey.category !== 'appointment' && !updatedSurvey.syncedToSalesforce);
-          
-        if (stillFailed) {
-          const errorMsg = updatedSurvey.syncError || 'Sync completed but status shows failed - check Salesforce credentials in .env file';
-          showAlert('Sync Issue', `Sync attempted but may have failed:\n\n${errorMsg}\n\nCheck console logs for details.`);
-        } else {
+        // Check if sync actually succeeded by verifying flags
+        const salesforceOk = survey.category === 'appointment' ? updatedSurvey.syncedToSalesforce === true : updatedSurvey.syncedToSalesforce === true;
+        const zapierOk = survey.category === 'appointment' ? updatedSurvey.syncedToZapier === true : true;
+        
+        if (salesforceOk && zapierOk) {
+          // Full success
           const syncType = survey.category === 'appointment' ? 'Salesforce and Zapier' : 'Salesforce';
           showAlert('Sync Successful ✓', `Survey synced to ${syncType} successfully!`);
+        } else {
+          // Partial or complete failure
+          let failureMsg = 'Sync attempted but verification failed:\n\n';
+          
+          if (!salesforceOk) {
+            failureMsg += '• Salesforce: FAILED\n';
+          }
+          if (survey.category === 'appointment' && !zapierOk) {
+            failureMsg += '• Zapier: FAILED\n';
+          }
+          
+          if (updatedSurvey.syncError) {
+            failureMsg += `\nError: ${updatedSurvey.syncError}`;
+          }
+          
+          showAlert('Sync Issue', failureMsg);
         }
       } else if (result.failed > 0) {
-        const errorMsg = updatedSurvey?.syncError || 'Sync failed - check Salesforce credentials and network connection';
+        const errorMsg = updatedSurvey?.syncError || 'Sync failed - check Salesforce/Zapier credentials and network connection';
         showAlert('Sync Failed', `Failed to sync survey:\n\n${errorMsg}`);
       } else if (result.duplicates > 0) {
         showAlert('Duplicate Detected', 'This survey already exists in Salesforce.');
