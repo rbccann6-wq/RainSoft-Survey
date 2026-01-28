@@ -699,66 +699,6 @@ export default function SurveyScreen() {
           </View>
         );
 
-      case 'multiselect':
-        const currentMultiSelect = (answer as string[]) || [];
-        const toggleMultiSelect = (option: string) => {
-          let newSelection: string[];
-          
-          // Special handling for "None" option
-          if (option === 'None') {
-            // If None is selected, clear all others
-            newSelection = currentMultiSelect.includes('None') ? [] : ['None'];
-          } else {
-            // Remove "None" if user selects any other option
-            const withoutNone = currentMultiSelect.filter(o => o !== 'None');
-            
-            if (withoutNone.includes(option)) {
-              // Deselect this option
-              newSelection = withoutNone.filter(o => o !== option);
-            } else {
-              // Add this option
-              newSelection = [...withoutNone, option];
-            }
-          }
-          
-          // Update both the answer in the answers object
-          setAnswers({ ...answers, [currentQuestion.id]: newSelection });
-        };
-        
-        return (
-          <View style={styles.optionsContainer}>
-            {currentQuestion.options?.map((option) => {
-              const isSelected = currentMultiSelect.includes(option);
-              return (
-                <Button
-                  key={option}
-                  title={option}
-                  onPress={() => toggleMultiSelect(option)}
-                  variant={isSelected ? 'primary' : 'outline'}
-                  backgroundColor={isSelected ? theme.primary : 'transparent'}
-                  textColor={isSelected ? '#FFFFFF' : theme.primary}
-                  size="large"
-                  fullWidth
-                />
-              );
-            })}
-            <Button
-              title="Continue"
-              onPress={() => {
-                if (currentMultiSelect.length === 0) {
-                  showAlert('Selection Required', 'Please select at least one option or "None"');
-                  return;
-                }
-                handleAnswer(currentMultiSelect);
-              }}
-              backgroundColor={theme.success}
-              size="large"
-              fullWidth
-              disabled={currentMultiSelect.length === 0}
-            />
-          </View>
-        );
-
       case 'number':
         return (
           <View style={styles.inputContainer}>
@@ -790,68 +730,6 @@ export default function SurveyScreen() {
             />
           </View>
         );
-
-      case 'multiselect':
-        const currentMultiSelect = (answer as string[]) || [];
-        const toggleMultiSelect = (option: string) => {
-          let newSelection: string[];
-          
-          // Special handling for "None" option
-          if (option === 'None') {
-            // If None is selected, clear all others
-            newSelection = currentMultiSelect.includes('None') ? [] : ['None'];
-          } else {
-            // Remove "None" if user selects any other option
-            const withoutNone = currentMultiSelect.filter(o => o !== 'None');
-            
-            if (withoutNone.includes(option)) {
-              // Deselect this option
-              newSelection = withoutNone.filter(o => o !== option);
-            } else {
-              // Add this option
-              newSelection = [...withoutNone, option];
-            }
-          }
-          
-          // Update both the answer in the answers object
-          setAnswers({ ...answers, [currentQuestion.id]: newSelection });
-        };
-        
-        return (
-          <View style={styles.optionsContainer}>
-            {currentQuestion.options?.map((option) => {
-              const isSelected = currentMultiSelect.includes(option);
-              return (
-                <Button
-                  key={option}
-                  title={option}
-                  onPress={() => toggleMultiSelect(option)}
-                  variant={isSelected ? 'primary' : 'outline'}
-                  backgroundColor={isSelected ? theme.primary : 'transparent'}
-                  textColor={isSelected ? '#FFFFFF' : theme.primary}
-                  size="large"
-                  fullWidth
-                />
-              );
-            })}
-            <Button
-              title="Continue"
-              onPress={() => {
-                if (currentMultiSelect.length === 0) {
-                  showAlert('Selection Required', 'Please select at least one option or "None"');
-                  return;
-                }
-                handleAnswer(currentMultiSelect);
-              }}
-              backgroundColor={theme.success}
-              size="large"
-              fullWidth
-              disabled={currentMultiSelect.length === 0}
-            />
-          </View>
-        );
-
-
 
       case 'contact':
         return (
@@ -941,66 +819,6 @@ export default function SurveyScreen() {
           </View>
         );
 
-      case 'multiselect':
-        const currentMultiSelect = (answer as string[]) || [];
-        const toggleMultiSelect = (option: string) => {
-          let newSelection: string[];
-          
-          // Special handling for "None" option
-          if (option === 'None') {
-            // If None is selected, clear all others
-            newSelection = currentMultiSelect.includes('None') ? [] : ['None'];
-          } else {
-            // Remove "None" if user selects any other option
-            const withoutNone = currentMultiSelect.filter(o => o !== 'None');
-            
-            if (withoutNone.includes(option)) {
-              // Deselect this option
-              newSelection = withoutNone.filter(o => o !== option);
-            } else {
-              // Add this option
-              newSelection = [...withoutNone, option];
-            }
-          }
-          
-          // Update both the answer in the answers object
-          setAnswers({ ...answers, [currentQuestion.id]: newSelection });
-        };
-        
-        return (
-          <View style={styles.optionsContainer}>
-            {currentQuestion.options?.map((option) => {
-              const isSelected = currentMultiSelect.includes(option);
-              return (
-                <Button
-                  key={option}
-                  title={option}
-                  onPress={() => toggleMultiSelect(option)}
-                  variant={isSelected ? 'primary' : 'outline'}
-                  backgroundColor={isSelected ? theme.primary : 'transparent'}
-                  textColor={isSelected ? '#FFFFFF' : theme.primary}
-                  size="large"
-                  fullWidth
-                />
-              );
-            })}
-            <Button
-              title="Continue"
-              onPress={() => {
-                if (currentMultiSelect.length === 0) {
-                  showAlert('Selection Required', 'Please select at least one option or "None"');
-                  return;
-                }
-                handleAnswer(currentMultiSelect);
-              }}
-              backgroundColor={theme.success}
-              size="large"
-              fullWidth
-              disabled={currentMultiSelect.length === 0}
-            />
-          </View>
-        );
-
       case 'signature':
         return (
           <View style={styles.signatureContainer}>
@@ -1056,66 +874,6 @@ export default function SurveyScreen() {
               size="large"
               fullWidth
               disabled={!signature}
-            />
-          </View>
-        );
-
-      case 'multiselect':
-        const currentMultiSelect = (answer as string[]) || [];
-        const toggleMultiSelect = (option: string) => {
-          let newSelection: string[];
-          
-          // Special handling for "None" option
-          if (option === 'None') {
-            // If None is selected, clear all others
-            newSelection = currentMultiSelect.includes('None') ? [] : ['None'];
-          } else {
-            // Remove "None" if user selects any other option
-            const withoutNone = currentMultiSelect.filter(o => o !== 'None');
-            
-            if (withoutNone.includes(option)) {
-              // Deselect this option
-              newSelection = withoutNone.filter(o => o !== option);
-            } else {
-              // Add this option
-              newSelection = [...withoutNone, option];
-            }
-          }
-          
-          // Update both the answer in the answers object
-          setAnswers({ ...answers, [currentQuestion.id]: newSelection });
-        };
-        
-        return (
-          <View style={styles.optionsContainer}>
-            {currentQuestion.options?.map((option) => {
-              const isSelected = currentMultiSelect.includes(option);
-              return (
-                <Button
-                  key={option}
-                  title={option}
-                  onPress={() => toggleMultiSelect(option)}
-                  variant={isSelected ? 'primary' : 'outline'}
-                  backgroundColor={isSelected ? theme.primary : 'transparent'}
-                  textColor={isSelected ? '#FFFFFF' : theme.primary}
-                  size="large"
-                  fullWidth
-                />
-              );
-            })}
-            <Button
-              title="Continue"
-              onPress={() => {
-                if (currentMultiSelect.length === 0) {
-                  showAlert('Selection Required', 'Please select at least one option or "None"');
-                  return;
-                }
-                handleAnswer(currentMultiSelect);
-              }}
-              backgroundColor={theme.success}
-              size="large"
-              fullWidth
-              disabled={currentMultiSelect.length === 0}
             />
           </View>
         );
