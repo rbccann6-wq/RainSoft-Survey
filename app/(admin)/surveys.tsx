@@ -1,4 +1,4 @@
-// Admin surveys view with duplicates tab
+// Admin surveys view with tabs: Surveys, Appointments, Renters, Duplicates
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,14 +17,33 @@ import { Survey } from '@/types';
 export default function SurveysScreen() {
   const { surveys, loadData } = useApp();
   const { showAlert } = useAlert();
-  const [activeTab, setActiveTab] = useState<'all' | 'duplicates'>('all');
+  const [activeTab, setActiveTab] = useState<'surveys' | 'appointments' | 'renters' | 'duplicates'>('surveys');
+  const [searchQuery, setSearchQuery] = useState('');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
+  // Filter surveys by category and search
+  const filterSurveysBySearch = (surveyList: Survey[]) => {
+    if (!searchQuery.trim()) return surveyList;
+    
+    const query = searchQuery.toLowerCase();
+    return surveyList.filter(s => {
+      const firstName = s.answers.contact_info?.firstName?.toLowerCase() || '';
+      const lastName = s.answers.contact_info?.lastName?.toLowerCase() || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      const phone = s.answers.contact_info?.phone?.replace(/\D/g, '') || '';
+      const searchPhone = query.replace(/\D/g, '');
+      
+      return fullName.includes(query) || phone.includes(searchPhone);
+    });
+  };
+  
   const duplicates = surveys.filter(s => s.isDuplicate && !s.duplicateReviewed);
-  const allSurveys = surveys.filter(s => !s.isDuplicate || s.duplicateReviewed);
+  const surveysOnly = filterSurveysBySearch(surveys.filter(s => s.category === 'survey' && (!s.isDuplicate || s.duplicateReviewed)));
+  const appointmentsOnly = filterSurveysBySearch(surveys.filter(s => s.category === 'appointment' && (!s.isDuplicate || s.duplicateReviewed)));
+  const rentersOnly = filterSurveysBySearch(surveys.filter(s => s.category === 'renter' && (!s.isDuplicate || s.duplicateReviewed)));
 
   const handleDeleteDuplicate = (surveyId: string) => {
     showAlert('Delete Survey', 'Are you sure you want to delete this duplicate?', [
@@ -49,27 +68,18 @@ export default function SurveysScreen() {
   // Format phone number to (999) 999-9999
   const formatPhoneNumber = (phone: string): string => {
     if (!phone) return '';
-    
-    // Remove all non-digits
     const digits = phone.replace(/\D/g, '');
-    
-    // If not 10 digits, return as-is
     if (digits.length !== 10) return phone;
-    
-    // Format as (999) 999-9999
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   };
 
   const handleEditSurvey = (survey: Survey) => {
-    const surveyCopy = JSON.parse(JSON.stringify(survey)); // Deep copy
-    
-    // Format phone number on open
+    const surveyCopy = JSON.parse(JSON.stringify(survey));
     if (surveyCopy.answers.contact_info?.phone) {
       const formatted = formatPhoneNumber(surveyCopy.answers.contact_info.phone);
       surveyCopy.answers.contact_info.phone = formatted;
       surveyCopy.answers.phone = formatted;
     }
-    
     setEditingSurvey(surveyCopy);
     setShowEditModal(true);
   };
@@ -83,8 +93,8 @@ export default function SurveysScreen() {
     if (surveyIndex !== -1) {
       allSurveys[surveyIndex] = {
         ...editingSurvey,
-        syncError: undefined, // Clear error when user edits
-        syncedToSalesforce: false, // Mark as needs re-sync
+        syncError: undefined,
+        syncedToSalesforce: false,
         syncedToZapier: editingSurvey.category === 'appointment' ? false : allSurveys[surveyIndex].syncedToZapier,
       };
       await StorageService.saveSurveys(allSurveys);
@@ -104,20 +114,32 @@ export default function SurveysScreen() {
 
     setSyncingId(survey.id);
     try {
-      // Add to sync queue
       const queue = await StorageService.getSyncQueue() || [];
       
       // Remove any existing queue items for this survey
-      const filteredQueue = queue.filter(item => item.data.id !== survey.id);
+      const filteredQueue = queue.filter(item => 
+        item.data.id !== survey.id && 
+        (item.type !== 'appointment' || item.data.survey?.id !== survey.id)
+      );
       
-      // Add survey to queue
+      // For appointments: sync to both Salesforce (survey) AND Zapier (appointment)
       if (survey.category === 'appointment' && survey.appointment) {
-        filteredQueue.push({
-          type: 'appointment',
-          data: { survey, appointment: survey.appointment },
-          timestamp: new Date().toISOString(),
-        });
+        if (survey.syncedToSalesforce === false) {
+          filteredQueue.push({
+            type: 'survey',
+            data: survey,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        if (survey.syncedToZapier === false) {
+          filteredQueue.push({
+            type: 'appointment',
+            data: { survey, appointment: survey.appointment },
+            timestamp: new Date().toISOString(),
+          });
+        }
       } else {
+        // Regular surveys only sync to Salesforce
         filteredQueue.push({
           type: 'survey',
           data: survey,
@@ -126,15 +148,13 @@ export default function SurveysScreen() {
       }
       
       await StorageService.saveData('sync_queue', filteredQueue);
-      
-      // Trigger immediate sync
       const result = await SyncService.triggerImmediateSync();
       await loadData();
       
       if (result.synced > 0) {
-        showAlert('Sync Successful ✓', 'Survey synced to Salesforce successfully!');
+        const syncType = survey.category === 'appointment' ? 'Salesforce and Zapier' : 'Salesforce';
+        showAlert('Sync Successful ✓', `Survey synced to ${syncType} successfully!`);
       } else if (result.failed > 0) {
-        // Get updated survey to show error
         const updatedSurveys = await StorageService.getSurveys() || [];
         const syncedSurvey = updatedSurveys.find(s => s.id === survey.id);
         const errorMsg = syncedSurvey?.syncError || 'Unknown error';
@@ -170,7 +190,6 @@ export default function SurveysScreen() {
     setVerifyingId(null);
 
     if (result.exists) {
-      // Update verification status
       const allSurveys = await StorageService.getSurveys() || [];
       const surveyIndex = allSurveys.findIndex(s => s.id === survey.id);
       if (surveyIndex !== -1) {
@@ -183,9 +202,7 @@ export default function SurveysScreen() {
       showAlert(
         'Record Verified ✓',
         `Salesforce record ${survey.salesforceId} exists and is accessible.\n\nView in Salesforce:\n${result.recordUrl}`,
-        [
-          { text: 'OK' }
-        ]
+        [{ text: 'OK' }]
       );
     } else {
       showAlert(
@@ -193,6 +210,197 @@ export default function SurveysScreen() {
         `${result.error || 'Record not found'}\n\nRecord ID: ${survey.salesforceId}\n\nThis survey may not have actually synced to Salesforce.`
       );
     }
+  };
+
+  // Render survey card
+  const renderSurveyCard = (survey: Survey) => {
+    const getSyncBadgeStyle = (synced: boolean | undefined) => {
+      if (synced === true) return { bg: '#E8F5E9', color: '#4CAF50', icon: 'check-circle' as const };
+      if (synced === false) return { bg: '#FFEBEE', color: '#F44336', icon: 'error' as const };
+      return { bg: '#FFF3E0', color: '#FF9800', icon: 'pending' as const };
+    };
+
+    const salesforceBadge = getSyncBadgeStyle(survey.syncedToSalesforce);
+    const zapierBadge = getSyncBadgeStyle(survey.syncedToZapier);
+
+    const customerName = survey.answers.contact_info 
+      ? `${survey.answers.contact_info.firstName || ''} ${survey.answers.contact_info.lastName || ''}`.trim() 
+      : 'Unknown';
+    const customerPhone = survey.answers.contact_info?.phone || 'No phone';
+    const employeeAlias = survey.employeeAlias || 'N/A';
+
+    return (
+      <View key={survey.id} style={styles.surveyCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.surveyName}>{customerName}</Text>
+            <View style={styles.aliasBadge}>
+              <MaterialIcons name="person" size={12} color={LOWES_THEME.primary} />
+              <Text style={styles.aliasText}>{employeeAlias}</Text>
+            </View>
+          </View>
+          <View style={[
+            styles.categoryBadge,
+            { backgroundColor: survey.category === 'appointment' ? LOWES_THEME.success : LOWES_THEME.primary },
+          ]}>
+            <Text style={styles.categoryText}>{survey.category}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.contactRow}>
+          <MaterialIcons name="phone" size={16} color={LOWES_THEME.textSubtle} />
+          <Text style={styles.surveyPhone}>{customerPhone}</Text>
+        </View>
+        
+        <View style={styles.contactRow}>
+          <MaterialIcons name="schedule" size={16} color={LOWES_THEME.textSubtle} />
+          <Text style={styles.surveyDate}>{formatFullDateTime(survey.timestamp)}</Text>
+        </View>
+
+        <View style={styles.syncStatusSection}>
+          <Text style={styles.syncStatusLabel}>Sync Status:</Text>
+          <View style={styles.syncBadges}>
+            <View style={[styles.syncBadge, { backgroundColor: salesforceBadge.bg }]}>
+              <MaterialIcons name={salesforceBadge.icon} size={14} color={salesforceBadge.color} />
+              <Text style={[styles.syncBadgeText, { color: salesforceBadge.color }]}>
+                SF: {survey.syncedToSalesforce === true ? 'Synced' : survey.syncedToSalesforce === false ? 'Failed' : 'Pending'}
+              </Text>
+            </View>
+
+            <View style={[styles.syncBadge, { backgroundColor: zapierBadge.bg }]}>
+              <MaterialIcons name={zapierBadge.icon} size={14} color={zapierBadge.color} />
+              <Text style={[styles.syncBadgeText, { color: zapierBadge.color }]}>
+                Zapier: {survey.syncedToZapier === true ? 'Synced' : survey.syncedToZapier === false ? 'Failed' : 'Pending'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {survey.syncedToSalesforce && (
+          <View style={styles.salesforceIdSection}>
+            <View style={styles.salesforceIdRow}>
+              <View style={styles.salesforceIdInfo}>
+                {survey.salesforceId ? (
+                  <>
+                    <Text style={styles.salesforceIdLabel}>Salesforce ID:</Text>
+                    <Text style={styles.salesforceIdValue}>{survey.salesforceId}</Text>
+                    {survey.salesforceVerified && (
+                      <View style={styles.verifiedBadge}>
+                        <MaterialIcons name="verified" size={12} color="#4CAF50" />
+                        <Text style={styles.verifiedText}>Verified</Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.salesforceIdLabel}>Salesforce ID:</Text>
+                    <Text style={styles.noIdText}>No ID stored (old sync)</Text>
+                    <Text style={styles.phoneHint}>Phone: {survey.answers.contact_info?.phone || 'N/A'}</Text>
+                  </>
+                )}
+              </View>
+              <Pressable
+                onPress={() => handleVerifySalesforce(survey)}
+                disabled={verifyingId === survey.id}
+                style={[styles.verifyButton, verifyingId === survey.id && styles.verifyButtonDisabled]}
+              >
+                <MaterialIcons 
+                  name={verifyingId === survey.id ? "hourglass-empty" : "search"} 
+                  size={16} 
+                  color={verifyingId === survey.id ? "#999" : LOWES_THEME.primary} 
+                />
+                <Text style={[styles.verifyButtonText, verifyingId === survey.id && styles.verifyButtonTextDisabled]}>
+                  {verifyingId === survey.id ? 'Checking...' : 'Verify'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {(survey.syncError || survey.syncedToSalesforce === false || survey.syncedToZapier === false) && (
+          <View style={styles.errorBanner}>
+            <MaterialIcons name="warning" size={16} color="#F44336" />
+            <Text style={styles.errorText}>
+              {survey.syncError || 'Sync failed - tap Retry Sync to try again'}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.surveyActions}>
+          <Pressable onPress={() => handleEditSurvey(survey)} style={styles.actionButton}>
+            <MaterialIcons name="edit" size={18} color={LOWES_THEME.primary} />
+            <Text style={styles.actionButtonText}>Edit</Text>
+          </Pressable>
+          
+          {(survey.syncedToSalesforce === false || survey.syncedToZapier === false) && (
+            <Pressable
+              onPress={() => handleRetrySync(survey)}
+              disabled={syncingId === survey.id}
+              style={[styles.actionButton, syncingId === survey.id && styles.actionButtonDisabled]}
+            >
+              {syncingId === survey.id ? (
+                <ActivityIndicator size="small" color={LOWES_THEME.success} />
+              ) : (
+                <MaterialIcons name="sync" size={18} color={LOWES_THEME.success} />
+              )}
+              <Text style={[styles.actionButtonText, { color: LOWES_THEME.success }]}>
+                {syncingId === survey.id ? 'Syncing...' : 'Retry Sync'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  // Render duplicate card
+  const renderDuplicateCard = (survey: Survey) => {
+    const customerName = survey.answers.contact_info 
+      ? `${survey.answers.contact_info.firstName || ''} ${survey.answers.contact_info.lastName || ''}`.trim() 
+      : 'Unknown';
+    const customerPhone = survey.answers.contact_info?.phone || 'No phone';
+    const employeeAlias = survey.employeeAlias || 'N/A';
+
+    return (
+      <View key={survey.id} style={[styles.surveyCard, styles.duplicateCard]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={styles.surveyName}>{customerName}</Text>
+            <View style={styles.aliasBadge}>
+              <MaterialIcons name="person" size={12} color={LOWES_THEME.primary} />
+              <Text style={styles.aliasText}>{employeeAlias}</Text>
+            </View>
+          </View>
+          <MaterialIcons name="warning" size={24} color={LOWES_THEME.warning} />
+        </View>
+        <View style={styles.contactRow}>
+          <MaterialIcons name="phone" size={16} color={LOWES_THEME.textSubtle} />
+          <Text style={styles.surveyPhone}>{customerPhone}</Text>
+        </View>
+        
+        {survey.syncError && (
+          <View style={styles.errorBanner}>
+            <MaterialIcons name="warning" size={16} color="#F44336" />
+            <Text style={styles.errorText}>{survey.syncError}</Text>
+          </View>
+        )}
+        
+        <View style={styles.duplicateActions}>
+          <Button
+            title="Delete"
+            onPress={() => handleDeleteDuplicate(survey.id)}
+            variant="danger"
+            size="small"
+          />
+          <Button
+            title="Re-upload"
+            onPress={() => handleReupload(survey.id)}
+            backgroundColor={LOWES_THEME.primary}
+            size="small"
+          />
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -206,19 +414,39 @@ export default function SurveysScreen() {
         )}
       </View>
 
+      <View style={styles.searchContainer}>
+        <MaterialIcons name="search" size={20} color={LOWES_THEME.textSubtle} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name or phone..."
+          placeholderTextColor={LOWES_THEME.textSubtle}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')}>
+            <MaterialIcons name="close" size={20} color={LOWES_THEME.textSubtle} />
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.tabs}>
-        <Pressable
-          onPress={() => setActiveTab('all')}
-          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
-        >
-          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
-            All Surveys ({allSurveys.length})
+        <Pressable onPress={() => setActiveTab('surveys')} style={[styles.tab, activeTab === 'surveys' && styles.activeTab]}>
+          <Text style={[styles.tabText, activeTab === 'surveys' && styles.activeTabText]}>
+            Surveys ({surveysOnly.length})
           </Text>
         </Pressable>
-        <Pressable
-          onPress={() => setActiveTab('duplicates')}
-          style={[styles.tab, activeTab === 'duplicates' && styles.activeTab]}
-        >
+        <Pressable onPress={() => setActiveTab('appointments')} style={[styles.tab, activeTab === 'appointments' && styles.activeTab]}>
+          <Text style={[styles.tabText, activeTab === 'appointments' && styles.activeTabText]}>
+            Appointments ({appointmentsOnly.length})
+          </Text>
+        </Pressable>
+        <Pressable onPress={() => setActiveTab('renters')} style={[styles.tab, activeTab === 'renters' && styles.activeTab]}>
+          <Text style={[styles.tabText, activeTab === 'renters' && styles.activeTabText]}>
+            Renters ({rentersOnly.length})
+          </Text>
+        </Pressable>
+        <Pressable onPress={() => setActiveTab('duplicates')} style={[styles.tab, activeTab === 'duplicates' && styles.activeTab]}>
           <Text style={[styles.tabText, activeTab === 'duplicates' && styles.activeTabText]}>
             Duplicates ({duplicates.length})
           </Text>
@@ -226,174 +454,32 @@ export default function SurveysScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {activeTab === 'all' ? (
-          allSurveys.length === 0 ? (
+        {activeTab === 'surveys' ? (
+          surveysOnly.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="assignment" size={64} color={LOWES_THEME.textSubtle} />
-              <Text style={styles.emptyText}>No surveys yet</Text>
+              <Text style={styles.emptyText}>{searchQuery ? 'No surveys match your search' : 'No surveys yet'}</Text>
             </View>
           ) : (
-            <View style={styles.surveyList}>
-              {allSurveys.map((survey) => {
-                const getSyncBadgeStyle = (synced: boolean | undefined) => {
-                  if (synced === true) return { bg: '#E8F5E9', color: '#4CAF50', icon: 'check-circle' as const };
-                  if (synced === false) return { bg: '#FFEBEE', color: '#F44336', icon: 'error' as const };
-                  return { bg: '#FFF3E0', color: '#FF9800', icon: 'pending' as const };
-                };
-
-                const salesforceBadge = getSyncBadgeStyle(survey.syncedToSalesforce);
-                const zapierBadge = getSyncBadgeStyle(survey.syncedToZapier);
-
-                // Extract customer info
-                const customerName = survey.answers.contact_info 
-                  ? `${survey.answers.contact_info.firstName || ''} ${survey.answers.contact_info.lastName || ''}`.trim() 
-                  : 'Unknown';
-                const customerPhone = survey.answers.contact_info?.phone || 'No phone';
-                const employeeAlias = survey.employeeAlias || 'N/A';
-
-                return (
-                  <View key={survey.id} style={styles.surveyCard}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.cardHeaderLeft}>
-                        <Text style={styles.surveyName}>{customerName}</Text>
-                        <View style={styles.aliasBadge}>
-                          <MaterialIcons name="person" size={12} color={LOWES_THEME.primary} />
-                          <Text style={styles.aliasText}>{employeeAlias}</Text>
-                        </View>
-                      </View>
-                      <View style={[
-                        styles.categoryBadge,
-                        { backgroundColor: survey.category === 'appointment' ? LOWES_THEME.success : LOWES_THEME.primary },
-                      ]}>
-                        <Text style={styles.categoryText}>{survey.category}</Text>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.contactRow}>
-                      <MaterialIcons name="phone" size={16} color={LOWES_THEME.textSubtle} />
-                      <Text style={styles.surveyPhone}>{customerPhone}</Text>
-                    </View>
-                    
-                    <View style={styles.contactRow}>
-                      <MaterialIcons name="schedule" size={16} color={LOWES_THEME.textSubtle} />
-                      <Text style={styles.surveyDate}>
-                        {formatFullDateTime(survey.timestamp)}
-                      </Text>
-                    </View>
-
-                    {/* Sync Status Section */}
-                    <View style={styles.syncStatusSection}>
-                      <Text style={styles.syncStatusLabel}>Sync Status:</Text>
-                      <View style={styles.syncBadges}>
-                        {/* Salesforce Badge */}
-                        <View style={[styles.syncBadge, { backgroundColor: salesforceBadge.bg }]}>
-                          <MaterialIcons 
-                            name={salesforceBadge.icon} 
-                            size={14} 
-                            color={salesforceBadge.color} 
-                          />
-                          <Text style={[styles.syncBadgeText, { color: salesforceBadge.color }]}>
-                            SF: {survey.syncedToSalesforce === true ? 'Synced' : survey.syncedToSalesforce === false ? 'Failed' : 'Pending'}
-                          </Text>
-                        </View>
-
-                        {/* Zapier Badge */}
-                        <View style={[styles.syncBadge, { backgroundColor: zapierBadge.bg }]}>
-                          <MaterialIcons 
-                            name={zapierBadge.icon} 
-                            size={14} 
-                            color={zapierBadge.color} 
-                          />
-                          <Text style={[styles.syncBadgeText, { color: zapierBadge.color }]}>
-                            Zapier: {survey.syncedToZapier === true ? 'Synced' : survey.syncedToZapier === false ? 'Failed' : 'Pending'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Salesforce Record ID and Verification */}
-                    {survey.syncedToSalesforce && (
-                      <View style={styles.salesforceIdSection}>
-                        <View style={styles.salesforceIdRow}>
-                          <View style={styles.salesforceIdInfo}>
-                            {survey.salesforceId ? (
-                              <>
-                                <Text style={styles.salesforceIdLabel}>Salesforce ID:</Text>
-                                <Text style={styles.salesforceIdValue}>{survey.salesforceId}</Text>
-                                {survey.salesforceVerified && (
-                                  <View style={styles.verifiedBadge}>
-                                    <MaterialIcons name="verified" size={12} color="#4CAF50" />
-                                    <Text style={styles.verifiedText}>Verified</Text>
-                                  </View>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <Text style={styles.salesforceIdLabel}>Salesforce ID:</Text>
-                                <Text style={styles.noIdText}>No ID stored (old sync)</Text>
-                                <Text style={styles.phoneHint}>Phone: {survey.answers.contact_info?.phone || 'N/A'}</Text>
-                              </>
-                            )}
-                          </View>
-                          <Pressable
-                            onPress={() => handleVerifySalesforce(survey)}
-                            disabled={verifyingId === survey.id}
-                            style={[styles.verifyButton, verifyingId === survey.id && styles.verifyButtonDisabled]}
-                          >
-                            <MaterialIcons 
-                              name={verifyingId === survey.id ? "hourglass-empty" : "search"} 
-                              size={16} 
-                              color={verifyingId === survey.id ? "#999" : LOWES_THEME.primary} 
-                            />
-                            <Text style={[styles.verifyButtonText, verifyingId === survey.id && styles.verifyButtonTextDisabled]}>
-                              {verifyingId === survey.id ? 'Checking...' : 'Verify'}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    )}
-
-                    {/* Error Message if any */}
-                    {(survey.syncError || survey.syncedToSalesforce === false || survey.syncedToZapier === false) && (
-                      <View style={styles.errorBanner}>
-                        <MaterialIcons name="warning" size={16} color="#F44336" />
-                        <Text style={styles.errorText}>
-                          {survey.syncError || 'Sync failed - tap Retry Sync to try again'}
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Action Buttons */}
-                    <View style={styles.surveyActions}>
-                      <Pressable
-                        onPress={() => handleEditSurvey(survey)}
-                        style={styles.actionButton}
-                      >
-                        <MaterialIcons name="edit" size={18} color={LOWES_THEME.primary} />
-                        <Text style={styles.actionButtonText}>Edit</Text>
-                      </Pressable>
-                      
-                      {(survey.syncedToSalesforce === false || survey.syncedToZapier === false) && (
-                        <Pressable
-                          onPress={() => handleRetrySync(survey)}
-                          disabled={syncingId === survey.id}
-                          style={[styles.actionButton, syncingId === survey.id && styles.actionButtonDisabled]}
-                        >
-                          {syncingId === survey.id ? (
-                            <ActivityIndicator size="small" color={LOWES_THEME.success} />
-                          ) : (
-                            <MaterialIcons name="sync" size={18} color={LOWES_THEME.success} />
-                          )}
-                          <Text style={[styles.actionButtonText, { color: LOWES_THEME.success }]}>
-                            {syncingId === survey.id ? 'Syncing...' : 'Retry Sync'}
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
+            <View style={styles.surveyList}>{surveysOnly.map(renderSurveyCard)}</View>
+          )
+        ) : activeTab === 'appointments' ? (
+          appointmentsOnly.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="event" size={64} color={LOWES_THEME.textSubtle} />
+              <Text style={styles.emptyText}>{searchQuery ? 'No appointments match your search' : 'No appointments yet'}</Text>
             </View>
+          ) : (
+            <View style={styles.surveyList}>{appointmentsOnly.map(renderSurveyCard)}</View>
+          )
+        ) : activeTab === 'renters' ? (
+          rentersOnly.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="home" size={64} color={LOWES_THEME.textSubtle} />
+              <Text style={styles.emptyText}>{searchQuery ? 'No renters match your search' : 'No renter surveys yet'}</Text>
+            </View>
+          ) : (
+            <View style={styles.surveyList}>{rentersOnly.map(renderSurveyCard)}</View>
           )
         ) : (
           duplicates.length === 0 ? (
@@ -402,68 +488,12 @@ export default function SurveysScreen() {
               <Text style={styles.emptyText}>No duplicates to review</Text>
             </View>
           ) : (
-            <View style={styles.surveyList}>
-              {duplicates.map((survey) => {
-                const customerName = survey.answers.contact_info 
-                  ? `${survey.answers.contact_info.firstName || ''} ${survey.answers.contact_info.lastName || ''}`.trim() 
-                  : 'Unknown';
-                const customerPhone = survey.answers.contact_info?.phone || 'No phone';
-                const employeeAlias = survey.employeeAlias || 'N/A';
-
-                return (
-                  <View key={survey.id} style={[styles.surveyCard, styles.duplicateCard]}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.cardHeaderLeft}>
-                        <Text style={styles.surveyName}>{customerName}</Text>
-                        <View style={styles.aliasBadge}>
-                          <MaterialIcons name="person" size={12} color={LOWES_THEME.primary} />
-                          <Text style={styles.aliasText}>{employeeAlias}</Text>
-                        </View>
-                      </View>
-                      <MaterialIcons name="warning" size={24} color={LOWES_THEME.warning} />
-                    </View>
-                    <View style={styles.contactRow}>
-                      <MaterialIcons name="phone" size={16} color={LOWES_THEME.textSubtle} />
-                      <Text style={styles.surveyPhone}>{customerPhone}</Text>
-                    </View>
-                    
-                    {/* Error Message if any */}
-                    {survey.syncError && (
-                      <View style={styles.errorBanner}>
-                        <MaterialIcons name="warning" size={16} color="#F44336" />
-                        <Text style={styles.errorText}>{survey.syncError}</Text>
-                      </View>
-                    )}
-                    
-                    <View style={styles.duplicateActions}>
-                      <Button
-                        title="Delete"
-                        onPress={() => handleDeleteDuplicate(survey.id)}
-                        variant="danger"
-                        size="small"
-                      />
-                      <Button
-                        title="Re-upload"
-                        onPress={() => handleReupload(survey.id)}
-                        backgroundColor={LOWES_THEME.primary}
-                        size="small"
-                      />
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
+            <View style={styles.surveyList}>{duplicates.map(renderDuplicateCard)}</View>
           )
         )}
       </ScrollView>
 
-      {/* Edit Survey Modal */}
-      <Modal
-        visible={showEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.editModal}>
             <View style={styles.editModalHeader}>
@@ -476,7 +506,6 @@ export default function SurveysScreen() {
             <ScrollView style={styles.editModalContent}>
               {editingSurvey && (
                 <>
-                  {/* Contact Information */}
                   <View style={styles.editSection}>
                     <Text style={styles.editSectionTitle}>Contact Information</Text>
                     
@@ -487,10 +516,7 @@ export default function SurveysScreen() {
                         ...editingSurvey,
                         answers: {
                           ...editingSurvey.answers,
-                          contact_info: {
-                            ...editingSurvey.answers.contact_info,
-                            firstName: text,
-                          },
+                          contact_info: { ...editingSurvey.answers.contact_info, firstName: text },
                         },
                       })}
                     />
@@ -502,10 +528,7 @@ export default function SurveysScreen() {
                         ...editingSurvey,
                         answers: {
                           ...editingSurvey.answers,
-                          contact_info: {
-                            ...editingSurvey.answers.contact_info,
-                            lastName: text,
-                          },
+                          contact_info: { ...editingSurvey.answers.contact_info, lastName: text },
                         },
                       })}
                     />
@@ -514,17 +537,13 @@ export default function SurveysScreen() {
                       label="Phone"
                       value={editingSurvey.answers.contact_info?.phone || ''}
                       onChangeText={(text) => {
-                        // Auto-format phone number as user types
                         const formatted = formatPhoneNumber(text);
                         setEditingSurvey({
                           ...editingSurvey,
                           answers: {
                             ...editingSurvey.answers,
                             phone: formatted,
-                            contact_info: {
-                              ...editingSurvey.answers.contact_info,
-                              phone: formatted,
-                            },
+                            contact_info: { ...editingSurvey.answers.contact_info, phone: formatted },
                           },
                         });
                       }}
@@ -538,10 +557,7 @@ export default function SurveysScreen() {
                         ...editingSurvey,
                         answers: {
                           ...editingSurvey.answers,
-                          contact_info: {
-                            ...editingSurvey.answers.contact_info,
-                            address: text,
-                          },
+                          contact_info: { ...editingSurvey.answers.contact_info, address: text },
                         },
                       })}
                     />
@@ -555,10 +571,7 @@ export default function SurveysScreen() {
                             ...editingSurvey,
                             answers: {
                               ...editingSurvey.answers,
-                              contact_info: {
-                                ...editingSurvey.answers.contact_info,
-                                city: text,
-                              },
+                              contact_info: { ...editingSurvey.answers.contact_info, city: text },
                             },
                           })}
                         />
@@ -571,10 +584,7 @@ export default function SurveysScreen() {
                             ...editingSurvey,
                             answers: {
                               ...editingSurvey.answers,
-                              contact_info: {
-                                ...editingSurvey.answers.contact_info,
-                                state: text,
-                              },
+                              contact_info: { ...editingSurvey.answers.contact_info, state: text },
                             },
                           })}
                         />
@@ -588,22 +598,17 @@ export default function SurveysScreen() {
                         ...editingSurvey,
                         answers: {
                           ...editingSurvey.answers,
-                          contact_info: {
-                            ...editingSurvey.answers.contact_info,
-                            zipCode: text,
-                          },
+                          contact_info: { ...editingSurvey.answers.contact_info, zipCode: text },
                         },
                       })}
                       keyboardType="numeric"
                     />
                   </View>
 
-                  {/* Survey Answers */}
                   <View style={styles.editSection}>
                     <Text style={styles.editSectionTitle}>Survey Answers</Text>
-                    
                     {Object.entries(editingSurvey.answers).map(([key, value]) => {
-                      if (key === 'contact_info') return null; // Already shown above
+                      if (key === 'contact_info') return null;
                       return (
                         <View key={key} style={styles.editFieldRow}>
                           <Text style={styles.editFieldLabel}>{key.replace(/_/g, ' ')}:</Text>
@@ -612,10 +617,7 @@ export default function SurveysScreen() {
                             value={typeof value === 'object' ? JSON.stringify(value) : String(value)}
                             onChangeText={(text) => setEditingSurvey({
                               ...editingSurvey,
-                              answers: {
-                                ...editingSurvey.answers,
-                                [key]: text,
-                              },
+                              answers: { ...editingSurvey.answers, [key]: text },
                             })}
                           />
                         </View>
@@ -623,59 +625,14 @@ export default function SurveysScreen() {
                     })}
                   </View>
 
-                  {/* Appointment Info (if applicable) */}
                   {editingSurvey.appointment && (
                     <View style={styles.editSection}>
                       <Text style={styles.editSectionTitle}>Appointment Details</Text>
                       
-                      <Input
-                        label="Address"
-                        value={editingSurvey.appointment.address}
-                        onChangeText={(text) => setEditingSurvey({
-                          ...editingSurvey,
-                          appointment: {
-                            ...editingSurvey.appointment!,
-                            address: text,
-                          },
-                        })}
-                      />
-
-                      <Input
-                        label="Date"
-                        value={editingSurvey.appointment.date}
-                        onChangeText={(text) => setEditingSurvey({
-                          ...editingSurvey,
-                          appointment: {
-                            ...editingSurvey.appointment!,
-                            date: text,
-                          },
-                        })}
-                      />
-
-                      <Input
-                        label="Time"
-                        value={editingSurvey.appointment.time}
-                        onChangeText={(text) => setEditingSurvey({
-                          ...editingSurvey,
-                          appointment: {
-                            ...editingSurvey.appointment!,
-                            time: text,
-                          },
-                        })}
-                      />
-
-                      <Input
-                        label="Notes"
-                        value={editingSurvey.appointment.notes || ''}
-                        onChangeText={(text) => setEditingSurvey({
-                          ...editingSurvey,
-                          appointment: {
-                            ...editingSurvey.appointment!,
-                            notes: text,
-                          },
-                        })}
-                        multiline
-                      />
+                      <Input label="Address" value={editingSurvey.appointment.address} onChangeText={(text) => setEditingSurvey({ ...editingSurvey, appointment: { ...editingSurvey.appointment!, address: text }})} />
+                      <Input label="Date" value={editingSurvey.appointment.date} onChangeText={(text) => setEditingSurvey({ ...editingSurvey, appointment: { ...editingSurvey.appointment!, date: text }})} />
+                      <Input label="Time" value={editingSurvey.appointment.time} onChangeText={(text) => setEditingSurvey({ ...editingSurvey, appointment: { ...editingSurvey.appointment!, time: text }})} />
+                      <Input label="Notes" value={editingSurvey.appointment.notes || ''} onChangeText={(text) => setEditingSurvey({ ...editingSurvey, appointment: { ...editingSurvey.appointment!, notes: text }})} multiline />
                     </View>
                   )}
                 </>
@@ -683,16 +640,8 @@ export default function SurveysScreen() {
             </ScrollView>
 
             <View style={styles.editModalFooter}>
-              <Button
-                title="Cancel"
-                onPress={() => setShowEditModal(false)}
-                variant="outline"
-              />
-              <Button
-                title="Save Changes"
-                onPress={handleSaveEdit}
-                backgroundColor={LOWES_THEME.primary}
-              />
+              <Button title="Cancel" onPress={() => setShowEditModal(false)} variant="outline" />
+              <Button title="Save Changes" onPress={handleSaveEdit} backgroundColor={LOWES_THEME.primary} />
             </View>
           </View>
         </View>
@@ -702,353 +651,69 @@ export default function SurveysScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: LOWES_THEME.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-  },
-  headerTitle: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: '700',
-    color: LOWES_THEME.text,
-  },
-  duplicateBadge: {
-    backgroundColor: LOWES_THEME.error,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-  },
-  duplicateText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '700',
-  },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: 2,
-    borderBottomColor: LOWES_THEME.border,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-  },
-  activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: LOWES_THEME.primary,
-  },
-  tabText: {
-    fontSize: FONTS.sizes.md,
-    color: LOWES_THEME.textSubtle,
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: LOWES_THEME.primary,
-    fontWeight: '600',
-  },
-  content: {
-    padding: SPACING.lg,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl * 2,
-    gap: SPACING.md,
-  },
-  emptyText: {
-    fontSize: FONTS.sizes.lg,
-    color: LOWES_THEME.textSubtle,
-  },
-  surveyList: {
-    gap: SPACING.md,
-  },
-  surveyCard: {
-    backgroundColor: LOWES_THEME.surface,
-    padding: SPACING.lg,
-    borderRadius: 12,
-    gap: SPACING.sm,
-  },
-  duplicateCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: LOWES_THEME.warning,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.xs,
-  },
-  cardHeaderLeft: {
-    flex: 1,
-    gap: SPACING.xs,
-  },
-  surveyName: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '600',
-    color: LOWES_THEME.text,
-  },
-  aliasBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  aliasText: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
-    color: LOWES_THEME.primary,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  categoryBadge: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
-  },
-  categoryText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  surveyPhone: {
-    fontSize: FONTS.sizes.md,
-    color: LOWES_THEME.text,
-    fontWeight: '500',
-  },
-  surveyDate: {
-    fontSize: FONTS.sizes.sm,
-    color: LOWES_THEME.textSubtle,
-  },
-  syncStatusSection: {
-    marginTop: SPACING.md,
-    gap: SPACING.xs,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: LOWES_THEME.border,
-  },
-  syncStatusLabel: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
-    color: LOWES_THEME.textSubtle,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  syncBadges: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    flexWrap: 'wrap',
-  },
-  syncBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 8,
-  },
-  syncBadgeText: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING.xs,
-    marginTop: SPACING.sm,
-    padding: SPACING.sm,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F44336',
-  },
-  errorText: {
-    flex: 1,
-    fontSize: FONTS.sizes.xs,
-    color: '#C62828',
-    lineHeight: 16,
-  },
-  salesforceIdSection: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: LOWES_THEME.border,
-  },
-  salesforceIdRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  salesforceIdInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  salesforceIdLabel: {
-    fontSize: FONTS.sizes.xs,
-    color: LOWES_THEME.textSubtle,
-    fontWeight: '600',
-  },
-  salesforceIdValue: {
-    fontSize: FONTS.sizes.sm,
-    color: LOWES_THEME.text,
-    fontFamily: 'monospace',
-    fontWeight: '500',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  verifiedText: {
-    fontSize: FONTS.sizes.xs,
-    color: '#4CAF50',
-    fontWeight: '600',
-  },
-  verifyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: LOWES_THEME.primary,
-    backgroundColor: '#F0F7FF',
-  },
-  verifyButtonDisabled: {
-    borderColor: '#DDD',
-    backgroundColor: '#F5F5F5',
-  },
-  verifyButtonText: {
-    fontSize: FONTS.sizes.xs,
-    color: LOWES_THEME.primary,
-    fontWeight: '600',
-  },
-  verifyButtonTextDisabled: {
-    color: '#999',
-  },
-  noIdText: {
-    fontSize: FONTS.sizes.sm,
-    color: '#FF9800',
-    fontStyle: 'italic',
-    fontWeight: '500',
-  },
-  phoneHint: {
-    fontSize: FONTS.sizes.xs,
-    color: LOWES_THEME.textSubtle,
-    marginTop: 2,
-  },
-  duplicateActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  surveyActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: LOWES_THEME.border,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: LOWES_THEME.border,
-    backgroundColor: LOWES_THEME.background,
-  },
-  actionButtonDisabled: {
-    opacity: 0.5,
-  },
-  actionButtonText: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-    color: LOWES_THEME.primary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-  },
-  editModal: {
-    flex: 1,
-    backgroundColor: LOWES_THEME.background,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: SPACING.lg,
-    backgroundColor: LOWES_THEME.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: LOWES_THEME.border,
-  },
-  editModalTitle: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: '700',
-    color: LOWES_THEME.text,
-  },
-  editModalContent: {
-    flex: 1,
-    padding: SPACING.lg,
-  },
-  editSection: {
-    marginBottom: SPACING.xl,
-    gap: SPACING.md,
-  },
-  editSectionTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '700',
-    color: LOWES_THEME.text,
-    marginBottom: SPACING.sm,
-  },
-  editRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-  },
-  editFieldRow: {
-    marginBottom: SPACING.md,
-  },
-  editFieldLabel: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-    color: LOWES_THEME.textSubtle,
-    marginBottom: 4,
-    textTransform: 'capitalize',
-  },
-  editFieldInput: {
-    borderWidth: 1,
-    borderColor: LOWES_THEME.border,
-    borderRadius: 8,
-    padding: SPACING.md,
-    fontSize: FONTS.sizes.md,
-    color: LOWES_THEME.text,
-    backgroundColor: LOWES_THEME.surface,
-  },
-  editModalFooter: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    padding: SPACING.lg,
-    backgroundColor: LOWES_THEME.surface,
-    borderTopWidth: 1,
-    borderTopColor: LOWES_THEME.border,
-  },
+  container: { flex: 1, backgroundColor: LOWES_THEME.background },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.lg },
+  headerTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: LOWES_THEME.text },
+  duplicateBadge: { backgroundColor: LOWES_THEME.error, borderRadius: 12, paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs },
+  duplicateText: { color: '#FFFFFF', fontSize: FONTS.sizes.sm, fontWeight: '700' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.lg, marginBottom: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, backgroundColor: LOWES_THEME.surface, borderRadius: 12, borderWidth: 1, borderColor: LOWES_THEME.border },
+  searchInput: { flex: 1, fontSize: FONTS.sizes.md, color: LOWES_THEME.text, paddingVertical: SPACING.xs },
+  tabs: { flexDirection: 'row', borderBottomWidth: 2, borderBottomColor: LOWES_THEME.border },
+  tab: { flex: 1, paddingVertical: SPACING.md, alignItems: 'center' },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: LOWES_THEME.primary },
+  tabText: { fontSize: FONTS.sizes.sm, color: LOWES_THEME.textSubtle, fontWeight: '500' },
+  activeTabText: { color: LOWES_THEME.primary, fontWeight: '600' },
+  content: { padding: SPACING.lg },
+  emptyState: { alignItems: 'center', paddingVertical: SPACING.xxl * 2, gap: SPACING.md },
+  emptyText: { fontSize: FONTS.sizes.lg, color: LOWES_THEME.textSubtle },
+  surveyList: { gap: SPACING.md },
+  surveyCard: { backgroundColor: LOWES_THEME.surface, padding: SPACING.lg, borderRadius: 12, gap: SPACING.sm },
+  duplicateCard: { borderLeftWidth: 4, borderLeftColor: LOWES_THEME.warning },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.xs },
+  cardHeaderLeft: { flex: 1, gap: SPACING.xs },
+  surveyName: { fontSize: FONTS.sizes.lg, fontWeight: '600', color: LOWES_THEME.text },
+  aliasBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E3F2FD', paddingHorizontal: SPACING.sm, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start' },
+  aliasText: { fontSize: FONTS.sizes.xs, fontWeight: '600', color: LOWES_THEME.primary },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  categoryBadge: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs, borderRadius: 12 },
+  categoryText: { color: '#FFFFFF', fontSize: FONTS.sizes.xs, fontWeight: '600', textTransform: 'uppercase' },
+  surveyPhone: { fontSize: FONTS.sizes.md, color: LOWES_THEME.text, fontWeight: '500' },
+  surveyDate: { fontSize: FONTS.sizes.sm, color: LOWES_THEME.textSubtle },
+  syncStatusSection: { marginTop: SPACING.md, gap: SPACING.xs, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: LOWES_THEME.border },
+  syncStatusLabel: { fontSize: FONTS.sizes.xs, fontWeight: '600', color: LOWES_THEME.textSubtle, textTransform: 'uppercase', letterSpacing: 0.5 },
+  syncBadges: { flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' },
+  syncBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: SPACING.sm, borderRadius: 8 },
+  syncBadgeText: { fontSize: FONTS.sizes.xs, fontWeight: '600' },
+  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.xs, marginTop: SPACING.sm, padding: SPACING.sm, backgroundColor: '#FFEBEE', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#F44336' },
+  errorText: { flex: 1, fontSize: FONTS.sizes.xs, color: '#C62828', lineHeight: 16 },
+  salesforceIdSection: { marginTop: SPACING.sm, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: LOWES_THEME.border },
+  salesforceIdRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACING.sm },
+  salesforceIdInfo: { flex: 1, gap: 2 },
+  salesforceIdLabel: { fontSize: FONTS.sizes.xs, color: LOWES_THEME.textSubtle, fontWeight: '600' },
+  salesforceIdValue: { fontSize: FONTS.sizes.sm, color: LOWES_THEME.text, fontFamily: 'monospace', fontWeight: '500' },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  verifiedText: { fontSize: FONTS.sizes.xs, color: '#4CAF50', fontWeight: '600' },
+  verifyButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm, borderRadius: 6, borderWidth: 1, borderColor: LOWES_THEME.primary, backgroundColor: '#F0F7FF' },
+  verifyButtonDisabled: { borderColor: '#DDD', backgroundColor: '#F5F5F5' },
+  verifyButtonText: { fontSize: FONTS.sizes.xs, color: LOWES_THEME.primary, fontWeight: '600' },
+  verifyButtonTextDisabled: { color: '#999' },
+  noIdText: { fontSize: FONTS.sizes.sm, color: '#FF9800', fontStyle: 'italic', fontWeight: '500' },
+  phoneHint: { fontSize: FONTS.sizes.xs, color: LOWES_THEME.textSubtle, marginTop: 2 },
+  duplicateActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
+  surveyActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: LOWES_THEME.border },
+  actionButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: SPACING.sm, paddingHorizontal: SPACING.md, borderRadius: 8, borderWidth: 1, borderColor: LOWES_THEME.border, backgroundColor: LOWES_THEME.background },
+  actionButtonDisabled: { opacity: 0.5 },
+  actionButtonText: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: LOWES_THEME.primary },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.9)' },
+  editModal: { flex: 1, backgroundColor: LOWES_THEME.background },
+  editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg, backgroundColor: LOWES_THEME.surface, borderBottomWidth: 1, borderBottomColor: LOWES_THEME.border },
+  editModalTitle: { fontSize: FONTS.sizes.xl, fontWeight: '700', color: LOWES_THEME.text },
+  editModalContent: { flex: 1, padding: SPACING.lg },
+  editSection: { marginBottom: SPACING.xl, gap: SPACING.md },
+  editSectionTitle: { fontSize: FONTS.sizes.lg, fontWeight: '700', color: LOWES_THEME.text, marginBottom: SPACING.sm },
+  editRow: { flexDirection: 'row', gap: SPACING.md },
+  editFieldRow: { marginBottom: SPACING.md },
+  editFieldLabel: { fontSize: FONTS.sizes.sm, fontWeight: '600', color: LOWES_THEME.textSubtle, marginBottom: 4, textTransform: 'capitalize' },
+  editFieldInput: { borderWidth: 1, borderColor: LOWES_THEME.border, borderRadius: 8, padding: SPACING.md, fontSize: FONTS.sizes.md, color: LOWES_THEME.text, backgroundColor: LOWES_THEME.surface },
+  editModalFooter: { flexDirection: 'row', gap: SPACING.md, padding: SPACING.lg, backgroundColor: LOWES_THEME.surface, borderTopWidth: 1, borderTopColor: LOWES_THEME.border },
 });
