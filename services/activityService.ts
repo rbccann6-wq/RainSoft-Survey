@@ -23,6 +23,7 @@ export interface InactiveUser {
   inactiveDurationMinutes: number;
   currentPage?: string;
   store?: string;
+  storeName?: string; // Specific store name like "HOME DEPOT 0808"
 }
 
 export interface InactivitySettings {
@@ -151,6 +152,7 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
           inactiveDurationMinutes: inactiveDuration,
           currentPage: reason,
           store: entry.store,
+          storeName: entry.storeName,
         });
       }
     }

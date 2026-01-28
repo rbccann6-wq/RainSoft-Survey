@@ -127,7 +127,7 @@ export default function LiveDashboard() {
               {item.employee.firstName} {item.employee.lastName}
             </Text>
             <Text style={styles.tableSubtext}>
-              {item.timeEntry.store === 'lowes' ? 'Lowes' : 'Home Depot'}
+              {item.timeEntry.storeName || (item.timeEntry.store === 'lowes' ? 'Lowes' : 'Home Depot')}
             </Text>
           </View>
         ),
@@ -287,7 +287,7 @@ export default function LiveDashboard() {
                     <View style={styles.storeRow}>
                       <MaterialIcons name="store" size={14} color="#666" />
                       <Text style={styles.storeText}>
-                        {timeEntry.store === 'lowes' ? 'Lowes' : 'Home Depot'}
+                        {timeEntry.storeName || (timeEntry.store === 'lowes' ? 'Lowes' : 'Home Depot')}
                       </Text>
                     </View>
                   </View>

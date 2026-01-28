@@ -335,7 +335,8 @@ export default function AdminDashboard() {
                           styles.storeText,
                           { color: emp.store === 'lowes' ? '#004990' : '#FF6200' },
                         ]}>
-                          {emp.store === 'lowes' ? 'Lowes' : 'Home Depot'}
+                          {timeEntries.find(te => te.employeeId === emp.id && !te.clockOut)?.storeName || 
+                           (emp.store === 'lowes' ? 'Lowes' : 'Home Depot')}
                         </Text>
                       </View>
                       

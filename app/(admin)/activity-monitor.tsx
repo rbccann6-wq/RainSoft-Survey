@@ -212,7 +212,7 @@ export default function ActivityMonitorScreen() {
                       <View style={styles.userInfo}>
                         <Text style={styles.userName}>{user.employeeName}</Text>
                         <Text style={styles.userStore}>
-                          {user.store === 'lowes' ? 'Lowes' : 'Home Depot'}
+                          {user.storeName || (user.store === 'lowes' ? 'Lowes' : 'Home Depot')}
                         </Text>
                       </View>
                       <View style={styles.badgeGroup}>
