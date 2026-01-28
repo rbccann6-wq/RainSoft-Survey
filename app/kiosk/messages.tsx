@@ -222,13 +222,16 @@ export default function MessagesScreen() {
               />
               
               <Pressable
-                onPress={sendMessage}
+                onPress={() => {
+                  if (messageText.trim()) {
+                    sendMessage();
+                  }
+                }}
                 disabled={!messageText.trim()}
                 style={[
                   styles.sendButton,
                   !messageText.trim() && styles.sendButtonDisabled
                 ]}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <MaterialIcons 
                   name="arrow-upward" 
@@ -651,8 +654,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: SPACING.sm,
     marginBottom: 2,
+    minHeight: 44, // Ensure minimum touch target
+    minWidth: 44,
   },
   sendButtonDisabled: {
     opacity: 0.4,
+    backgroundColor: '#C7C7CC',
   },
 });

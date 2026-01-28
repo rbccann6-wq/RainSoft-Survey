@@ -357,7 +357,11 @@ export default function AdminMessagesScreen() {
               />
               
               <Pressable
-                onPress={sendMessage}
+                onPress={() => {
+                  if (messageText.trim()) {
+                    sendMessage();
+                  }
+                }}
                 disabled={!messageText.trim()}
                 style={[
                   styles.sendButton,
@@ -783,9 +787,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: SPACING.sm,
     marginBottom: 2,
+    minHeight: 44, // Ensure minimum touch target
+    minWidth: 44,
   },
   sendButtonDisabled: {
     opacity: 0.4,
+    backgroundColor: '#C7C7CC',
   },
   cancelButton: {
     paddingHorizontal: SPACING.sm,

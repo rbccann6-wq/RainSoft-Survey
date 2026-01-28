@@ -40,32 +40,33 @@ export interface InactivitySettings {
 // COMPREHENSIVE: Check for inactive clocked-in users using heartbeat + survey activity
 export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5): Promise<InactiveUser[]> => {
   try {
-    const { getSurveys } = require('@/services/storageService');
+    const StorageService = require('@/services/storageService');
     
-    // Get all active time entries (clocked in, not clocked out)
-    const { data: activeEntries, error: entriesError } = await supabase
-      .from('time_entries')
-      .select(`
-        id,
-        employee_id,
-        store,
-        clock_in,
-        is_active_in_kiosk,
-        employees!inner(id, first_name, last_name)
-      `)
-      .is('clock_out', null);
-
-    if (entriesError || !activeEntries || activeEntries.length === 0) {
+    // CRITICAL: Use local storage to get ALL data (synced and unsynced)
+    const allTimeEntries = await StorageService.getTimeEntries();
+    const allEmployees = await StorageService.getEmployees();
+    const allSurveys = await StorageService.getSurveys();
+    
+    if (!allTimeEntries || !allEmployees) {
+      return [];
+    }
+    
+    // Filter for active time entries (clocked in, not clocked out)
+    const activeEntries = allTimeEntries.filter(entry => !entry.clockOut);
+    
+    if (activeEntries.length === 0) {
       return [];
     }
 
-    const allSurveys = await getSurveys();
     const today = new Date().toISOString().split('T')[0];
     const now = Date.now();
     const inactiveUsers: InactiveUser[] = [];
 
     // Check each clocked-in employee
     for (const entry of activeEntries) {
+      // Find employee details from local storage
+      const employee = allEmployees.find(emp => emp.id === entry.employeeId);
+      if (!employee) continue;
       let lastActivityTime: number;
       let lastActivityAt: string;
       let activitySource = '';
@@ -110,7 +111,7 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
       const inactiveDuration = Math.floor((now - lastActivityTime) / (1000 * 60));
       
       // IMMEDIATE INACTIVE: Employee explicitly exited kiosk mode
-      const hasExitedKiosk = entry.is_active_in_kiosk === false;
+      const hasExitedKiosk = entry.isActiveInKiosk === false;
       
       // HEARTBEAT INACTIVE: No heartbeat in last 2 minutes (should send every 30s)
       const heartbeatTimeout = activitySource === 'heartbeat' ? inactiveDuration >= 2 : false;
@@ -130,8 +131,8 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
         }
         
         inactiveUsers.push({
-          employeeId: entry.employee_id,
-          employeeName: `${(entry.employees as any).first_name} ${(entry.employees as any).last_name}`,
+          employeeId: entry.employeeId,
+          employeeName: `${employee.firstName} ${employee.lastName}`,
           timeEntryId: entry.id,
           lastActivityAt,
           inactiveDurationMinutes: inactiveDuration,
@@ -151,8 +152,8 @@ export const checkInactiveUsers = async (inactivityThresholdMinutes: number = 5)
 // Get last activity for an employee
 export const getLastActivity = async (employeeId: string): Promise<Date | null> => {
   try {
-    const { getSurveys } = require('@/services/storageService');
-    const allSurveys = await getSurveys();
+    const StorageService = require('@/services/storageService');
+    const allSurveys = await StorageService.getSurveys();
     const today = new Date().toISOString().split('T')[0];
     
     const employeeSurveysToday = allSurveys.filter(s => 
