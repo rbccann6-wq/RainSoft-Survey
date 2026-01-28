@@ -412,7 +412,7 @@ export default function KioskHome() {
         </View>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Onboarding Banner */}
         {currentUser && !currentUser.onboardingComplete && (
           <Pressable 
@@ -533,13 +533,13 @@ export default function KioskHome() {
           </View>
         )}
 
-        {/* Clock In Time Display */}
+        {/* Clock In Time Display - Compact */}
         {isClockedIn && activeTimeEntry && (
           <View style={[styles.clockInTimeCard, { backgroundColor: theme.surface, borderColor: theme.primary }]}>
             <View style={styles.clockInTimeRow}>
-              <MaterialIcons name="access-time" size={24} color={theme.primary} />
+              <MaterialIcons name="access-time" size={18} color={theme.primary} />
               <View style={styles.clockInTimeInfo}>
-                <Text style={[styles.clockInTimeLabel, { color: theme.textSubtle }]}>Clocked In At</Text>
+                <Text style={[styles.clockInTimeLabel, { color: theme.textSubtle }]}>Clocked In</Text>
                 <Text style={[styles.clockInTimeValue, { color: theme.text }]}>
                   {formatDateTime12Hour(activeTimeEntry.clockIn)}
                 </Text>
@@ -547,7 +547,7 @@ export default function KioskHome() {
             </View>
             {activeTimeEntry.gpsCoordinates && (
               <View style={styles.clockInLocation}>
-                <MaterialIcons name="location-on" size={16} color={theme.textSubtle} />
+                <MaterialIcons name="location-on" size={12} color={theme.textSubtle} />
                 <Text style={[styles.clockInLocationText, { color: theme.textSubtle }]}>
                   {activeTimeEntry.gpsCoordinates.latitude.toFixed(4)}, {activeTimeEntry.gpsCoordinates.longitude.toFixed(4)}
                 </Text>
@@ -562,7 +562,7 @@ export default function KioskHome() {
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
                 <View style={[styles.statIconCircle, { backgroundColor: '#2196F3' }]}>
-                  <MaterialIcons name="access-time" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="access-time" size={18} color="#FFFFFF" />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>
                   {(() => {
@@ -577,7 +577,7 @@ export default function KioskHome() {
               
               <View style={styles.statItem}>
                 <View style={[styles.statIconCircle, { backgroundColor: '#9E9E9E' }]}>
-                  <MaterialIcons name="home-work" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="home-work" size={18} color="#FFFFFF" />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>
                   {dailyCounts.renters}
@@ -587,7 +587,7 @@ export default function KioskHome() {
               
               <View style={styles.statItem}>
                 <View style={[styles.statIconCircle, { backgroundColor: '#4CAF50' }]}>
-                  <MaterialIcons name="assignment" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="assignment" size={18} color="#FFFFFF" />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>
                   {dailyStats.qualifiedSurveys}
@@ -597,7 +597,7 @@ export default function KioskHome() {
               
               <View style={styles.statItem}>
                 <View style={[styles.statIconCircle, { backgroundColor: '#FF9800' }]}>
-                  <MaterialIcons name="event" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="event" size={18} color="#FFFFFF" />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>
                   {dailyStats.appointments}
@@ -610,7 +610,7 @@ export default function KioskHome() {
                   styles.statIconCircle, 
                   { backgroundColor: dailyStats.surveysPerHour >= 5 ? '#4CAF50' : '#F44336' }
                 ]}>
-                  <MaterialIcons name="speed" size={20} color="#FFFFFF" />
+                  <MaterialIcons name="speed" size={18} color="#FFFFFF" />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>
                   {dailyStats.surveysPerHour.toFixed(1)}
@@ -630,7 +630,7 @@ export default function KioskHome() {
             ]}>
               <MaterialIcons 
                 name={dailyStats.surveysPerHour >= 5 ? 'check-circle' : 'trending-up'} 
-                size={18} 
+                size={16} 
                 color={dailyStats.surveysPerHour >= 5 ? '#4CAF50' : '#FF9800'} 
               />
               <Text style={[
@@ -644,7 +644,7 @@ export default function KioskHome() {
             </View>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* Modern Stats Modal */}
       {statsData && (
@@ -848,12 +848,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: SPACING.md,
-    gap: SPACING.md,
     maxWidth: isTabletDevice ? 900 : undefined,
     alignSelf: 'center',
     width: '100%',
-    paddingBottom: 90, // Space for utility bar
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    gap: SPACING.sm,
+    paddingBottom: 100, // Space for utility bar
   },
   utilityBar: {
     position: 'absolute',
@@ -993,9 +995,9 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   statsCard: {
-    borderRadius: 12,
-    padding: SPACING.md,
-    gap: SPACING.sm,
+    borderRadius: 10,
+    padding: SPACING.sm,
+    gap: SPACING.xs,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -1010,68 +1012,67 @@ const styles = StyleSheet.create({
     minWidth: isTabletDevice ? 100 : 80,
   },
   statIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
   },
   statLabel: {
-    fontSize: FONTS.sizes.sm,
+    fontSize: 11,
     textAlign: 'center',
   },
   performanceMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-    padding: SPACING.sm,
-    borderRadius: 8,
+    gap: 6,
+    padding: SPACING.xs,
+    borderRadius: 6,
   },
   performanceText: {
     flex: 1,
-    fontSize: FONTS.sizes.sm,
+    fontSize: 12,
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 16,
   },
   clockInTimeCard: {
-    borderRadius: 12,
-    borderWidth: 2,
-    padding: SPACING.md,
-    gap: SPACING.xs,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    padding: SPACING.sm,
+    gap: 4,
   },
   clockInTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   clockInTimeInfo: {
     flex: 1,
-    gap: 2,
   },
   clockInTimeLabel: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   clockInTimeValue: {
-    fontSize: FONTS.sizes.lg,
+    fontSize: FONTS.sizes.sm,
     fontWeight: '700',
   },
   clockInLocation: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
-    paddingTop: SPACING.xs,
+    gap: 4,
+    paddingTop: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E0E0E0',
   },
   clockInLocationText: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: 10,
   },
   onboardingBanner: {
     flexDirection: 'row',
