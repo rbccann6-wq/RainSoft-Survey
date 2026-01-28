@@ -1,11 +1,12 @@
-// Duplicate survey management
+// Duplicate survey management with enhanced Salesforce integration
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useApp } from '@/hooks/useApp';
 import { useAlert } from '@/template';
 import * as StorageService from '@/services/storageService';
+import * as SyncService from '@/services/syncService';
 import { Button } from '@/components/ui/Button';
 import { SPACING, FONTS, LOWES_THEME, HOME_DEPOT_THEME } from '@/constants/theme';
 import { Survey } from '@/types';
@@ -15,19 +16,89 @@ export default function DuplicatesScreen() {
   const { showAlert } = useAlert();
   const [selectedSurvey, setSelectedSurvey] = useState<Survey | null>(null);
   const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const duplicateSurveys = surveys.filter(s => s.isDuplicate && !s.duplicateReviewed);
   const reviewedDuplicates = surveys.filter(s => s.isDuplicate && s.duplicateReviewed);
 
-  const handleMarkAsReviewed = async (surveyId: string) => {
-    await StorageService.markSurveyAsReviewed(surveyId);
-    await loadData();
-    setShowComparisonModal(false);
-    showAlert('Marked as Reviewed', 'Duplicate has been reviewed and archived');
+  const handleArchive = async (surveyId: string) => {
+    showAlert('Archive Survey', 'Mark this duplicate as reviewed and archive it?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Archive',
+        onPress: async () => {
+          setLoading(true);
+          const result = await SyncService.archiveDuplicateSurvey(surveyId);
+          setLoading(false);
+          
+          if (result.success) {
+            await loadData();
+            setShowComparisonModal(false);
+            showAlert('Archived', 'Duplicate survey has been archived');
+          } else {
+            showAlert('Error', result.error || 'Failed to archive survey');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteLeadAndResync = async (survey: Survey) => {
+    if (!survey.duplicateInfo || survey.duplicateInfo.recordType !== 'Lead') {
+      showAlert('Error', 'Can only delete Lead records. This is an Account.');
+      return;
+    }
+
+    showAlert(
+      'Delete Lead & Re-sync',
+      `This will:\n1. Delete the existing Lead in Salesforce\n2. Create a new Lead with updated survey data\n\nAre you sure?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete & Re-sync',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            
+            // Step 1: Delete the Lead in Salesforce
+            const deleteResult = await SyncService.deleteSalesforceRecord(
+              survey.duplicateInfo!.salesforceId,
+              'Lead'
+            );
+            
+            if (!deleteResult.success) {
+              setLoading(false);
+              showAlert('Error', `Failed to delete Lead: ${deleteResult.error}`);
+              return;
+            }
+            
+            // Step 2: Re-sync the survey
+            const resyncResult = await SyncService.resyncSurveyAfterDelete(survey.id);
+            setLoading(false);
+            
+            if (resyncResult.success) {
+              await loadData();
+              setShowComparisonModal(false);
+              showAlert('Success', 'Lead deleted and survey re-synced to Salesforce');
+            } else {
+              showAlert('Error', `Re-sync failed: ${resyncResult.error}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleViewInSalesforce = (survey: Survey) => {
+    if (survey.duplicateInfo?.salesforceUrl) {
+      Linking.openURL(survey.duplicateInfo.salesforceUrl).catch(() => {
+        showAlert('Error', 'Could not open Salesforce. Please check your internet connection.');
+      });
+    }
   };
 
   const handleDelete = async (surveyId: string) => {
-    showAlert('Delete Survey', 'Are you sure you want to delete this duplicate survey?', [
+    showAlert('Delete Survey', 'Permanently delete this survey? This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -66,7 +137,7 @@ export default function DuplicatesScreen() {
           <View style={styles.infoContent}>
             <Text style={styles.infoTitle}>What are duplicates?</Text>
             <Text style={styles.infoText}>
-              Surveys flagged as duplicates already exist in Salesforce with the same phone number. Review them to decide whether to keep or delete.
+              Surveys flagged as duplicates already exist in Salesforce as Leads or Accounts with the same phone number. Review them to decide whether to delete the old Lead and re-sync, or archive the new survey.
             </Text>
           </View>
         </View>
@@ -88,10 +159,25 @@ export default function DuplicatesScreen() {
                       <Text style={styles.surveyName}>
                         {survey.answers.contact_info?.firstName} {survey.answers.contact_info?.lastName}
                       </Text>
-                      <MaterialIcons name="warning" size={20} color={LOWES_THEME.warning} />
+                      <View style={styles.duplicateBadge}>
+                        <MaterialIcons name="warning" size={16} color={LOWES_THEME.warning} />
+                        <Text style={styles.duplicateBadgeText}>
+                          {survey.duplicateInfo?.recordType || 'Duplicate'}
+                        </Text>
+                      </View>
                     </View>
                     
                     <Text style={styles.surveyPhone}>📞 {survey.answers.phone}</Text>
+                    
+                    {survey.duplicateInfo && (
+                      <View style={styles.salesforceInfo}>
+                        <MaterialIcons name="cloud" size={14} color={LOWES_THEME.textSubtle} />
+                        <Text style={styles.salesforceText}>
+                          {survey.duplicateInfo.recordName || 'Salesforce Record'}
+                        </Text>
+                      </View>
+                    )}
+                    
                     <Text style={styles.surveyDate}>
                       {new Date(survey.timestamp).toLocaleString()}
                     </Text>
@@ -147,7 +233,7 @@ export default function DuplicatesScreen() {
         )}
       </ScrollView>
 
-      {/* Comparison Modal */}
+      {/* Enhanced Review Modal */}
       <Modal
         visible={showComparisonModal}
         transparent
@@ -169,15 +255,76 @@ export default function DuplicatesScreen() {
                 <View style={styles.warningBanner}>
                   <MaterialIcons name="warning" size={24} color={LOWES_THEME.warning} />
                   <View style={styles.warningContent}>
-                    <Text style={styles.warningTitle}>Duplicate Detected</Text>
+                    <Text style={styles.warningTitle}>
+                      {selectedSurvey.duplicateInfo?.recordType || 'Duplicate'} Detected
+                    </Text>
                     <Text style={styles.warningText}>
-                      A lead with phone number {selectedSurvey.answers.phone} already exists in Salesforce
+                      A {selectedSurvey.duplicateInfo?.recordType?.toLowerCase() || 'record'} with phone number {selectedSurvey.answers.phone} already exists in Salesforce
                     </Text>
                   </View>
                 </View>
 
-                {/* Survey Details */}
+                {/* Existing Salesforce Record */}
+                {selectedSurvey.duplicateInfo && (
+                  <View style={styles.salesforceCard}>
+                    <View style={styles.salesforceHeader}>
+                      <MaterialIcons name="cloud" size={24} color={LOWES_THEME.primary} />
+                      <Text style={styles.salesforceHeaderTitle}>Existing Salesforce Record</Text>
+                    </View>
+                    
+                    <View style={styles.salesforceDetails}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Record Type</Text>
+                        <View style={[
+                          styles.recordTypeBadge,
+                          { backgroundColor: selectedSurvey.duplicateInfo.recordType === 'Lead' ? '#E3F2FD' : '#F3E5F5' }
+                        ]}>
+                          <Text style={[
+                            styles.recordTypeText,
+                            { color: selectedSurvey.duplicateInfo.recordType === 'Lead' ? '#1976D2' : '#7B1FA2' }
+                          ]}>
+                            {selectedSurvey.duplicateInfo.recordType}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {selectedSurvey.duplicateInfo.recordName && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Name</Text>
+                          <Text style={styles.detailValue}>{selectedSurvey.duplicateInfo.recordName}</Text>
+                        </View>
+                      )}
+
+                      {selectedSurvey.duplicateInfo.recordEmail && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Email</Text>
+                          <Text style={styles.detailValue}>{selectedSurvey.duplicateInfo.recordEmail}</Text>
+                        </View>
+                      )}
+
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Phone</Text>
+                        <Text style={styles.detailValue}>{selectedSurvey.duplicateInfo.matchedPhone}</Text>
+                      </View>
+
+                      <Button
+                        title="View in Salesforce"
+                        onPress={() => handleViewInSalesforce(selectedSurvey)}
+                        backgroundColor={LOWES_THEME.primary}
+                        icon={<MaterialIcons name="open-in-new" size={18} color="#FFF" />}
+                        fullWidth
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {/* New Survey Details */}
                 <View style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <MaterialIcons name="assignment" size={20} color={LOWES_THEME.text} />
+                    <Text style={styles.cardHeaderTitle}>New Survey Details</Text>
+                  </View>
+
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Customer</Text>
                     <Text style={styles.detailValue}>
@@ -252,11 +399,33 @@ export default function DuplicatesScreen() {
 
                 {/* Actions */}
                 <View style={styles.actionButtons}>
+                  {selectedSurvey.duplicateInfo?.recordType === 'Lead' && (
+                    <Button
+                      title={loading ? 'Processing...' : 'Delete Lead & Re-sync Survey'}
+                      onPress={() => handleDeleteLeadAndResync(selectedSurvey)}
+                      backgroundColor="#D32F2F"
+                      icon={loading ? <ActivityIndicator color="#FFF" size="small" /> : <MaterialIcons name="sync" size={20} color="#FFF" />}
+                      fullWidth
+                      disabled={loading}
+                    />
+                  )}
+                  
+                  {selectedSurvey.duplicateInfo?.recordType === 'Account' && (
+                    <View style={styles.accountWarning}>
+                      <MaterialIcons name="info" size={20} color={LOWES_THEME.primary} />
+                      <Text style={styles.accountWarningText}>
+                        This is an Account record. Accounts cannot be deleted automatically. Please review in Salesforce.
+                      </Text>
+                    </View>
+                  )}
+                  
                   <Button
-                    title="Mark as Reviewed"
-                    onPress={() => handleMarkAsReviewed(selectedSurvey.id)}
+                    title="Ignore & Archive"
+                    onPress={() => handleArchive(selectedSurvey.id)}
                     backgroundColor={LOWES_THEME.success}
+                    icon={<MaterialIcons name="archive" size={20} color="#FFF" />}
                     fullWidth
+                    disabled={loading}
                   />
                   
                   <Button
@@ -264,14 +433,20 @@ export default function DuplicatesScreen() {
                     onPress={() => handleDelete(selectedSurvey.id)}
                     variant="danger"
                     fullWidth
+                    disabled={loading}
                   />
                 </View>
 
-                <View style={styles.infoBox}>
-                  <MaterialIcons name="lightbulb" size={20} color={LOWES_THEME.primary} />
-                  <Text style={styles.infoBoxText}>
-                    "Mark as Reviewed" keeps the survey in archives. "Delete" removes it permanently.
-                  </Text>
+                <View style={styles.helpBox}>
+                  <MaterialIcons name="help-outline" size={20} color={LOWES_THEME.primary} />
+                  <View style={styles.helpContent}>
+                    <Text style={styles.helpTitle}>What should I do?</Text>
+                    <Text style={styles.helpText}>
+                      • <Text style={styles.helpBold}>Delete Lead & Re-sync:</Text> Removes old Lead, creates new one with updated data{'\n'}
+                      • <Text style={styles.helpBold}>Ignore & Archive:</Text> Keeps existing record, archives this survey{'\n'}
+                      • <Text style={styles.helpBold}>Delete Survey:</Text> Permanently removes this survey
+                    </Text>
+                  </View>
                 </View>
               </ScrollView>
             )}
@@ -376,10 +551,35 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
     color: LOWES_THEME.text,
+    flex: 1,
+  },
+  duplicateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  duplicateBadgeText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '600',
+    color: LOWES_THEME.warning,
   },
   surveyPhone: {
     fontSize: FONTS.sizes.sm,
     color: LOWES_THEME.textSubtle,
+  },
+  salesforceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  salesforceText: {
+    fontSize: FONTS.sizes.xs,
+    color: LOWES_THEME.textSubtle,
+    fontStyle: 'italic',
   },
   surveyDate: {
     fontSize: FONTS.sizes.xs,
@@ -492,12 +692,55 @@ const styles = StyleSheet.create({
     color: LOWES_THEME.text,
     lineHeight: 18,
   },
+  salesforceCard: {
+    backgroundColor: '#F0F7FF',
+    borderRadius: 12,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: LOWES_THEME.primary,
+  },
+  salesforceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  salesforceHeaderTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '700',
+    color: LOWES_THEME.text,
+  },
+  salesforceDetails: {
+    gap: SPACING.md,
+  },
+  recordTypeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recordTypeText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '700',
+  },
   detailsCard: {
     backgroundColor: LOWES_THEME.surface,
     padding: SPACING.lg,
     borderRadius: 12,
     gap: SPACING.md,
     marginBottom: SPACING.lg,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  cardHeaderTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '600',
+    color: LOWES_THEME.text,
   },
   detailRow: {
     gap: 4,
@@ -539,10 +782,43 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     marginBottom: SPACING.lg,
   },
-  infoBoxText: {
+  accountWarning: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    backgroundColor: '#F0F7FF',
+    padding: SPACING.md,
+    borderRadius: 8,
+  },
+  accountWarningText: {
     flex: 1,
     fontSize: FONTS.sizes.sm,
     color: LOWES_THEME.text,
     lineHeight: 18,
+  },
+  helpBox: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    backgroundColor: '#F0F7FF',
+    padding: SPACING.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: LOWES_THEME.primary,
+  },
+  helpContent: {
+    flex: 1,
+    gap: SPACING.xs,
+  },
+  helpTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '700',
+    color: LOWES_THEME.text,
+  },
+  helpText: {
+    fontSize: FONTS.sizes.sm,
+    color: LOWES_THEME.text,
+    lineHeight: 20,
+  },
+  helpBold: {
+    fontWeight: '700',
   },
 });

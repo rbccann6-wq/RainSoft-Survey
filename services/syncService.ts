@@ -268,17 +268,24 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
   return salesforceData;
 };
 
-// Check for duplicates in Salesforce
+// Check for duplicates in Salesforce (Leads and Accounts)
 const checkSalesforceDuplicate = async (
   accessToken: string,
   phone: string
-): Promise<boolean> => {
+): Promise<{
+  isDuplicate: boolean;
+  recordType?: 'Lead' | 'Account';
+  salesforceId?: string;
+  recordName?: string;
+  recordEmail?: string;
+}> => {
   try {
     const queryUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/query`;
-    const query = `SELECT Id FROM Lead WHERE Phone = '${phone}' LIMIT 1`;
     
-    const response = await fetch(
-      `${queryUrl}?q=${encodeURIComponent(query)}`,
+    // Check Leads first
+    const leadQuery = `SELECT Id, Name, Email FROM Lead WHERE Phone = '${phone}' LIMIT 1`;
+    const leadResponse = await fetch(
+      `${queryUrl}?q=${encodeURIComponent(leadQuery)}`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -287,16 +294,52 @@ const checkSalesforceDuplicate = async (
       }
     );
 
-    if (!response.ok) {
-      console.warn('⚠️ Duplicate check failed, proceeding with sync');
-      return false;
+    if (leadResponse.ok) {
+      const leadData = await leadResponse.json();
+      if (leadData.totalSize > 0) {
+        const record = leadData.records[0];
+        console.log('⚠️ Duplicate Lead found:', record.Id);
+        return {
+          isDuplicate: true,
+          recordType: 'Lead',
+          salesforceId: record.Id,
+          recordName: record.Name,
+          recordEmail: record.Email,
+        };
+      }
     }
+    
+    // Check Accounts
+    const accountQuery = `SELECT Id, Name, PersonEmail FROM Account WHERE PersonMobilePhone = '${phone}' OR Phone = '${phone}' LIMIT 1`;
+    const accountResponse = await fetch(
+      `${queryUrl}?q=${encodeURIComponent(accountQuery)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-    const data = await response.json();
-    return data.totalSize > 0;
+    if (accountResponse.ok) {
+      const accountData = await accountResponse.json();
+      if (accountData.totalSize > 0) {
+        const record = accountData.records[0];
+        console.log('⚠️ Duplicate Account found:', record.Id);
+        return {
+          isDuplicate: true,
+          recordType: 'Account',
+          salesforceId: record.Id,
+          recordName: record.Name,
+          recordEmail: record.PersonEmail,
+        };
+      }
+    }
+    
+    return { isDuplicate: false };
   } catch (error) {
     console.warn('⚠️ Duplicate check error:', error);
-    return false; // Proceed with sync if check fails
+    return { isDuplicate: false }; // Proceed with sync if check fails
   }
 };
 
@@ -334,7 +377,17 @@ export const verifySalesforceRecord = async (
 // Sync survey to Salesforce as a Lead
 export const syncToSalesforce = async (
   survey: Survey
-): Promise<{ success: boolean; isDuplicate?: boolean; salesforceId?: string }> => {
+): Promise<{ 
+  success: boolean; 
+  isDuplicate?: boolean; 
+  salesforceId?: string;
+  duplicateInfo?: {
+    recordType: 'Lead' | 'Account';
+    salesforceId: string;
+    recordName?: string;
+    recordEmail?: string;
+  };
+}> => {
   try {
     console.log('🔄 Starting Salesforce sync for survey:', survey.id);
     
@@ -342,12 +395,21 @@ export const syncToSalesforce = async (
     const accessToken = await authenticateSalesforce();
     
     // Check for duplicates if phone number exists
-    const phone = survey.answers.phone;
+    const phone = formatPhoneNumber(survey.answers.phone || '');
     if (phone) {
-      const isDuplicate = await checkSalesforceDuplicate(accessToken, phone);
-      if (isDuplicate) {
-        console.log('⚠️ Duplicate found in Salesforce:', phone);
-        return { success: true, isDuplicate: true };
+      const duplicateCheck = await checkSalesforceDuplicate(accessToken, phone);
+      if (duplicateCheck.isDuplicate) {
+        console.log(`⚠️ Duplicate ${duplicateCheck.recordType} found in Salesforce:`, duplicateCheck.salesforceId);
+        return { 
+          success: true, 
+          isDuplicate: true,
+          duplicateInfo: {
+            recordType: duplicateCheck.recordType!,
+            salesforceId: duplicateCheck.salesforceId!,
+            recordName: duplicateCheck.recordName,
+            recordEmail: duplicateCheck.recordEmail,
+          },
+        };
       }
     }
     
@@ -510,13 +572,21 @@ export const processSyncQueue = async (
             console.log('⚠️ Duplicate detected, adding to review queue:', survey.id);
             duplicateCount++;
             
-            // Mark survey as duplicate in storage
+            // Mark survey as duplicate in storage with detailed info
             const surveys = await StorageService.getSurveys() || [];
             const surveyIndex = surveys.findIndex(s => s.id === survey.id);
             if (surveyIndex !== -1) {
               surveys[surveyIndex].isDuplicate = true;
               surveys[surveyIndex].syncedToSalesforce = true;
-              surveys[surveyIndex].syncError = undefined; // Clear any previous errors
+              surveys[surveyIndex].syncError = undefined;
+              surveys[surveyIndex].duplicateInfo = {
+                recordType: result.duplicateInfo!.recordType,
+                salesforceId: result.duplicateInfo!.salesforceId,
+                salesforceUrl: `${SALESFORCE_CONFIG.instanceUrl}/lightning/r/${result.duplicateInfo!.recordType}/${result.duplicateInfo!.salesforceId}/view`,
+                matchedPhone: survey.answers.phone || '',
+                recordName: result.duplicateInfo!.recordName,
+                recordEmail: result.duplicateInfo!.recordEmail,
+              };
               await StorageService.saveSurveys(surveys);
             }
           } else {
@@ -729,6 +799,105 @@ export const testTwilioConnection = async () => {
     }
   } catch (error) {
     return { success: false, message: String(error) };
+  }
+};
+
+// Delete a Lead record in Salesforce
+export const deleteSalesforceRecord = async (
+  recordId: string,
+  recordType: 'Lead' | 'Account'
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log(`🗑️ Deleting ${recordType} in Salesforce:`, recordId);
+    
+    const accessToken = await authenticateSalesforce();
+    const deleteUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/sobjects/${recordType}/${recordId}`;
+    
+    const response = await fetch(deleteUrl, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Salesforce delete failed: ${response.status} - ${errorText}`);
+    }
+
+    console.log(`✅ ${recordType} deleted successfully`);
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Salesforce ${recordType} delete error:`, error);
+    return { success: false, error: String(error) };
+  }
+};
+
+// Re-sync a survey after deleting the duplicate
+export const resyncSurveyAfterDelete = async (
+  surveyId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const surveys = await StorageService.getSurveys() || [];
+    const survey = surveys.find(s => s.id === surveyId);
+    
+    if (!survey) {
+      throw new Error('Survey not found');
+    }
+    
+    // Clear duplicate flags
+    const surveyIndex = surveys.findIndex(s => s.id === surveyId);
+    surveys[surveyIndex].isDuplicate = false;
+    surveys[surveyIndex].duplicateReviewed = false;
+    surveys[surveyIndex].duplicateInfo = undefined;
+    surveys[surveyIndex].syncedToSalesforce = false;
+    surveys[surveyIndex].salesforceId = undefined;
+    surveys[surveyIndex].syncError = undefined;
+    await StorageService.saveSurveys(surveys);
+    
+    // Re-sync to Salesforce
+    const result = await syncToSalesforce(survey);
+    
+    if (result.success && !result.isDuplicate) {
+      // Update survey with new Salesforce ID
+      surveys[surveyIndex].syncedToSalesforce = true;
+      surveys[surveyIndex].salesforceId = result.salesforceId;
+      await StorageService.saveSurveys(surveys);
+      
+      console.log('✅ Survey re-synced successfully:', result.salesforceId);
+      return { success: true };
+    } else if (result.isDuplicate) {
+      throw new Error('Survey is still a duplicate - another record with this phone exists');
+    } else {
+      throw new Error('Re-sync failed');
+    }
+  } catch (error) {
+    console.error('❌ Re-sync error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
+// Archive a duplicate survey without re-syncing
+export const archiveDuplicateSurvey = async (
+  surveyId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const surveys = await StorageService.getSurveys() || [];
+    const surveyIndex = surveys.findIndex(s => s.id === surveyId);
+    
+    if (surveyIndex === -1) {
+      throw new Error('Survey not found');
+    }
+    
+    surveys[surveyIndex].duplicateReviewed = true;
+    await StorageService.saveSurveys(surveys);
+    
+    console.log('✅ Survey archived successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Archive error:', error);
+    return { success: false, error: String(error) };
   }
 };
 

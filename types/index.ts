@@ -70,6 +70,14 @@ export interface Survey {
   syncedToZapier: boolean;
   isDuplicate?: boolean;
   duplicateReviewed?: boolean;
+  duplicateInfo?: {
+    recordType: 'Lead' | 'Account';
+    salesforceId: string;
+    salesforceUrl: string;
+    matchedPhone: string;
+    recordName?: string;
+    recordEmail?: string;
+  };
   locationVerified?: boolean; // True if GPS matched to a known store
   syncError?: string; // Error message from last sync attempt
   salesforceId?: string; // Salesforce Lead/Contact record ID
