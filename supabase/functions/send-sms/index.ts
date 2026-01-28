@@ -75,14 +75,32 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Twilio API error:', response.status, errorText);
+      let errorMessage = 'Unknown error';
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.error_message || errorText;
+        console.error('Twilio API error:', {
+          status: response.status,
+          code: errorData.code,
+          message: errorMessage,
+          moreInfo: errorData.more_info,
+          to: formattedTo,
+          from: formattedFrom
+        });
+      } catch {
+        console.error('Twilio API error:', response.status, errorText);
+        errorMessage = errorText;
+      }
       
       // Return 200 with error details (Edge Function succeeded, Twilio failed)
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Twilio API error: ${response.status}`,
-          details: errorText
+          error: `Twilio: ${errorMessage}`,
+          status: response.status,
+          to: formattedTo,
+          from: formattedFrom
         }),
         { 
           status: 200, 
