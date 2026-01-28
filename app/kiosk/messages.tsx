@@ -72,6 +72,15 @@ export default function MessagesScreen() {
     }
   }, [selectedConversation]);
 
+  // Generate a valid UUID v4
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleSendMessage = async () => {
     const text = messageText.trim();
     if (!text) {
@@ -95,7 +104,7 @@ export default function MessagesScreen() {
 
     try {
       const message: Message = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         senderId: currentUser!.id,
         senderName: `${currentUser!.firstName} ${currentUser!.lastName}`,
         recipientIds,
