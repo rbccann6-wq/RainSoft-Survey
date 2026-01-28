@@ -247,6 +247,22 @@ export default function MessagesScreen() {
               autoFocus
             />
           </ScrollView>
+
+          {/* Send Button - Fixed at Bottom */}
+          <View style={[
+            styles.inputBar,
+            { paddingBottom: Math.max(insets.bottom, 8) }
+          ]}>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              onPress={handleSendMessage}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            >
+              <View style={styles.sendButton}>
+                <MaterialIcons name="send" size={24} color="#FFFFFF" />
+              </View>
+            </Pressable>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
