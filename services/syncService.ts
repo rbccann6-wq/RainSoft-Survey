@@ -708,9 +708,11 @@ export const testTwilioConnection = async () => {
     const { getSupabaseClient } = require('@/template');
     const supabase = getSupabaseClient();
     
-    // Send a test SMS to verify Twilio is working
-    const testPhone = '+15555555555'; // Test phone number
-    const testMessage = 'RainSoft Survey App - Twilio Connection Test';
+    // For testing: send SMS to a real phone number that you own
+    // Update this with your own phone number for testing
+    // Format: +1XXXXXXXXXX (10 digits with country code)
+    const testPhone = '3344895503'; // Replace with your phone number for testing
+    const testMessage = 'RainSoft Survey App - Twilio Connection Test ✓';
     
     const { data, error } = await supabase.functions.invoke('send-sms', {
       body: { to: testPhone, message: testMessage },
@@ -721,7 +723,7 @@ export const testTwilioConnection = async () => {
     }
     
     if (data?.success) {
-      return { success: true, message: 'Twilio SMS service connected and ready' };
+      return { success: true, message: `Twilio connected! Test SMS sent to ${testPhone}` };
     } else {
       return { success: false, message: data?.error || 'Unknown Twilio error' };
     }
