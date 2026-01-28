@@ -269,6 +269,8 @@ export default function SurveysScreen() {
       return { bg: '#FFF3E0', color: '#FF9800', icon: 'pending' as const };
     };
 
+    // Appointments only sync to Zapier, surveys only sync to Salesforce
+    const isAppointment = survey.category === 'appointment';
     const salesforceBadge = getSyncBadgeStyle(survey.syncedToSalesforce);
     const zapierBadge = getSyncBadgeStyle(survey.syncedToZapier);
 
@@ -309,19 +311,33 @@ export default function SurveysScreen() {
         <View style={styles.syncStatusSection}>
           <Text style={styles.syncStatusLabel}>Sync Status:</Text>
           <View style={styles.syncBadges}>
-            <View style={[styles.syncBadge, { backgroundColor: salesforceBadge.bg }]}>
-              <MaterialIcons name={salesforceBadge.icon} size={14} color={salesforceBadge.color} />
-              <Text style={[styles.syncBadgeText, { color: salesforceBadge.color }]}>
-                SF: {survey.syncedToSalesforce === true ? 'Synced' : survey.syncedToSalesforce === false ? 'Failed' : 'Pending'}
-              </Text>
-            </View>
+            {/* Surveys: Show Salesforce only */}
+            {!isAppointment && (
+              <View style={[styles.syncBadge, { backgroundColor: salesforceBadge.bg }]}>
+                <MaterialIcons name={salesforceBadge.icon} size={14} color={salesforceBadge.color} />
+                <Text style={[styles.syncBadgeText, { color: salesforceBadge.color }]}>
+                  Salesforce: {survey.syncedToSalesforce === true ? 'Synced' : survey.syncedToSalesforce === false ? 'Failed' : 'Pending'}
+                </Text>
+              </View>
+            )}
 
-            <View style={[styles.syncBadge, { backgroundColor: zapierBadge.bg }]}>
-              <MaterialIcons name={zapierBadge.icon} size={14} color={zapierBadge.color} />
-              <Text style={[styles.syncBadgeText, { color: zapierBadge.color }]}>
-                Zapier: {survey.syncedToZapier === true ? 'Synced' : survey.syncedToZapier === false ? 'Failed' : 'Pending'}
-              </Text>
-            </View>
+            {/* Appointments: Show both Salesforce and Zapier */}
+            {isAppointment && (
+              <>
+                <View style={[styles.syncBadge, { backgroundColor: salesforceBadge.bg }]}>
+                  <MaterialIcons name={salesforceBadge.icon} size={14} color={salesforceBadge.color} />
+                  <Text style={[styles.syncBadgeText, { color: salesforceBadge.color }]}>
+                    SF: {survey.syncedToSalesforce === true ? 'Synced' : survey.syncedToSalesforce === false ? 'Failed' : 'Pending'}
+                  </Text>
+                </View>
+                <View style={[styles.syncBadge, { backgroundColor: zapierBadge.bg }]}>
+                  <MaterialIcons name={zapierBadge.icon} size={14} color={zapierBadge.color} />
+                  <Text style={[styles.syncBadgeText, { color: zapierBadge.color }]}>
+                    Zapier: {survey.syncedToZapier === true ? 'Synced' : survey.syncedToZapier === false ? 'Failed' : 'Pending'}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -381,7 +397,9 @@ export default function SurveysScreen() {
             <Text style={styles.actionButtonText}>Edit</Text>
           </Pressable>
           
-          {(survey.syncedToSalesforce === false || survey.syncedToZapier === false) && (
+          {/* Show retry sync button if any sync failed */}
+          {((!isAppointment && survey.syncedToSalesforce === false) || 
+            (isAppointment && (survey.syncedToSalesforce === false || survey.syncedToZapier === false))) && (
             <Pressable
               onPress={() => handleRetrySync(survey)}
               disabled={syncingId === survey.id}
