@@ -414,67 +414,74 @@ const setKioskActive = async (isActive: boolean) => {
   };
 
   const submitSurvey = async (survey: Survey) => {
-    // ============ BULLETPROOF SAVE + IMMEDIATE SYNC PROCESS ============
-    // Step 1: Save to local storage FIRST (failsafe)
-    // Step 2: IMMEDIATELY sync to Salesforce/Zapier (online only)
-    // Step 3: Queue for retry ONLY if sync fails
+    // ============ OPTIMIZED SAVE: INSTANT FEEDBACK + BACKGROUND SYNC ============
+    // Step 1: Save to local storage FIRST (instant, <100ms)
+    // Step 2: Return immediately for instant UI feedback
+    // Step 3: Sync in background (non-blocking)
     
     try {
-      // CRITICAL: Save to local storage first (guaranteed to succeed)
+      // CRITICAL: Save to local storage first (guaranteed to succeed, very fast)
       const savedSurvey = await StorageService.addSurvey(survey);
       console.log(`✅ Survey ${survey.id} saved locally`);
       
-      // Check if we're online for immediate sync
+      // Reload data immediately to show new survey in UI
+      await loadData();
+      
+      // BACKGROUND SYNC (non-blocking) - don't await this
       if (isOnline) {
-        console.log('🌐 Online - attempting immediate sync...');
+        console.log('🌐 Online - starting background sync...');
         
-        try {
-          // IMMEDIATE Salesforce sync for surveys (not renters)
-          if (survey.category !== 'renter' && survey.answers?.contact_info?.phone) {
-            console.log('📤 Syncing survey to Salesforce...');
-            const syncResult = await SyncService.processSyncQueue([{
-              type: 'survey',
-              data: survey,
-              timestamp: survey.timestamp,
-            }]);
-            console.log(`✅ Salesforce: ${syncResult.synced} synced, ${syncResult.duplicates} duplicates, ${syncResult.failed} failed`);
-          }
-          
-          // IMMEDIATE Zapier sync for appointments (sync both survey to Salesforce AND appointment to Zapier)
-          if (survey.category === 'appointment' && survey.appointment) {
-            // First sync the survey part to Salesforce
-            console.log('📤 Syncing appointment survey to Salesforce...');
-            const salesforceResult = await SyncService.processSyncQueue([{
-              type: 'survey',
-              data: survey,
-              timestamp: survey.timestamp,
-            }]);
-            console.log(`✅ Appointment Survey → Salesforce: ${salesforceResult.synced} synced`);
+        // Fire and forget - sync in background without blocking UI
+        (async () => {
+          try {
+            // IMMEDIATE Salesforce sync for surveys (not renters)
+            if (survey.category !== 'renter' && survey.answers?.contact_info?.phone) {
+              console.log('📤 [Background] Syncing survey to Salesforce...');
+              const syncResult = await SyncService.processSyncQueue([{
+                type: 'survey',
+                data: survey,
+                timestamp: survey.timestamp,
+              }]);
+              console.log(`✅ [Background] Salesforce: ${syncResult.synced} synced, ${syncResult.duplicates} duplicates, ${syncResult.failed} failed`);
+            }
             
-            // Then sync appointment details to Zapier
-            console.log('📤 Syncing appointment to Zapier...');
-            const zapierResult = await SyncService.processSyncQueue([{
-              type: 'appointment',
-              data: { survey, appointment: survey.appointment },
-              timestamp: survey.timestamp,
-            }]);
-            console.log(`✅ Appointment → Zapier: ${zapierResult.synced} synced`);
+            // IMMEDIATE Zapier sync for appointments (sync both survey to Salesforce AND appointment to Zapier)
+            if (survey.category === 'appointment' && survey.appointment) {
+              // First sync the survey part to Salesforce
+              console.log('📤 [Background] Syncing appointment survey to Salesforce...');
+              const salesforceResult = await SyncService.processSyncQueue([{
+                type: 'survey',
+                data: survey,
+                timestamp: survey.timestamp,
+              }]);
+              console.log(`✅ [Background] Appointment Survey → Salesforce: ${salesforceResult.synced} synced`);
+              
+              // Then sync appointment details to Zapier
+              console.log('📤 [Background] Syncing appointment to Zapier...');
+              const zapierResult = await SyncService.processSyncQueue([{
+                type: 'appointment',
+                data: { survey, appointment: survey.appointment },
+                timestamp: survey.timestamp,
+              }]);
+              console.log(`✅ [Background] Appointment → Zapier: ${zapierResult.synced} synced`);
+            }
+            
+            // Success - reload to show updated sync status
+            await loadData();
+            console.log('✅ [Background] Sync complete');
+            
+          } catch (syncError) {
+            // Sync failed - already saved locally, will retry automatically
+            console.error('⚠️ [Background] Sync failed (queued for retry):', syncError);
+            await loadData(); // Reload to show "pending" status
           }
-          
-          // Success - reload to show updated sync status
-          await loadData();
-          console.log('✅ Immediate sync complete');
-          
-        } catch (syncError) {
-          // Sync failed - already saved locally, will retry automatically
-          console.error('⚠️ Immediate sync failed (queued for retry):', syncError);
-          await loadData(); // Reload to show "pending" status
-        }
+        })();
       } else {
         // Offline - data is safe locally, will sync when online
         console.log('📴 Offline - survey saved locally (will auto-sync when online)');
-        await loadData();
       }
+      
+      // Return immediately - UI shows success instantly
       
     } catch (error) {
       console.error('❌ CRITICAL ERROR: Local storage save failed:', error);
