@@ -40,14 +40,11 @@ const getStateAbbreviation = (state: string): string => {
   return abbr || trimmed; // Return original if not found
 };
 
-// Salesforce Configuration - MOVED TO ENVIRONMENT VARIABLES
+// Salesforce Configuration - NOW HANDLED BY EDGE FUNCTION
+// All credentials are stored securely in OnSpace Cloud Secrets
 export const SALESFORCE_CONFIG = {
-  instanceUrl: process.env.EXPO_PUBLIC_SALESFORCE_INSTANCE_URL || 'https://rainsoftse.my.salesforce.com',
-  clientId: process.env.EXPO_PUBLIC_SALESFORCE_CLIENT_ID || '',
-  clientSecret: process.env.EXPO_PUBLIC_SALESFORCE_CLIENT_SECRET || '',
-  username: process.env.EXPO_PUBLIC_SALESFORCE_USERNAME || '',
-  password: process.env.EXPO_PUBLIC_SALESFORCE_PASSWORD || '',
-  securityToken: process.env.EXPO_PUBLIC_SALESFORCE_SECURITY_TOKEN || '',
+  instanceUrl: 'https://rainsoftse.my.salesforce.com',
+  // No credentials needed - Edge Function handles authentication
 };
 
 // Zapier Webhook Configuration
@@ -72,50 +69,7 @@ interface SalesforceAuthResponse {
   token_type: string;
 }
 
-let salesforceAccessToken: string | null = null;
-let salesforceTokenExpiry: number = 0;
-
-// Authenticate with Salesforce
-export const authenticateSalesforce = async (): Promise<string> => {
-  // Check if we have a valid token
-  if (salesforceAccessToken && Date.now() < salesforceTokenExpiry) {
-    return salesforceAccessToken;
-  }
-
-  try {
-    const tokenUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/oauth2/token`;
-    
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'password',
-        client_id: SALESFORCE_CONFIG.clientId,
-        client_secret: SALESFORCE_CONFIG.clientSecret,
-        username: SALESFORCE_CONFIG.username,
-        password: SALESFORCE_CONFIG.password + SALESFORCE_CONFIG.securityToken,
-      }).toString(),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Salesforce auth failed: ${response.status} - ${errorText}`);
-    }
-
-    const data: SalesforceAuthResponse = await response.json();
-    salesforceAccessToken = data.access_token;
-    // Token expires in 2 hours, we'll refresh after 1.5 hours
-    salesforceTokenExpiry = Date.now() + (90 * 60 * 1000);
-    
-    console.log('✅ Salesforce authenticated successfully');
-    return salesforceAccessToken;
-  } catch (error) {
-    console.error('❌ Salesforce authentication failed:', error);
-    throw error;
-  }
-};
+// Authentication is now handled by Edge Function - no client-side auth needed
 
 // Format phone number to Salesforce format (999) 999-9999
 const formatPhoneNumber = (phone: string): string => {
@@ -268,9 +222,8 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
   return salesforceData;
 };
 
-// Check for duplicates in Salesforce (Leads and Accounts)
+// Check for duplicates in Salesforce via Edge Function
 const checkSalesforceDuplicate = async (
-  accessToken: string,
   phone: string
 ): Promise<{
   isDuplicate: boolean;
@@ -280,101 +233,48 @@ const checkSalesforceDuplicate = async (
   recordEmail?: string;
 }> => {
   try {
-    const queryUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/query`;
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
     
-    // Check Leads first
-    const leadQuery = `SELECT Id, Name, Email FROM Lead WHERE Phone = '${phone}' LIMIT 1`;
-    const leadResponse = await fetch(
-      `${queryUrl}?q=${encodeURIComponent(leadQuery)}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (leadResponse.ok) {
-      const leadData = await leadResponse.json();
-      if (leadData.totalSize > 0) {
-        const record = leadData.records[0];
-        console.log('⚠️ Duplicate Lead found:', record.Id);
-        return {
-          isDuplicate: true,
-          recordType: 'Lead',
-          salesforceId: record.Id,
-          recordName: record.Name,
-          recordEmail: record.Email,
-        };
-      }
+    const { data, error } = await supabase.functions.invoke('salesforce-sync', {
+      body: { action: 'check_duplicate', data: { phone } },
+    });
+    
+    if (error) {
+      console.warn('⚠️ Duplicate check error:', error);
+      return { isDuplicate: false };
     }
     
-    // Check Accounts
-    const accountQuery = `SELECT Id, Name, PersonEmail FROM Account WHERE PersonMobilePhone = '${phone}' OR Phone = '${phone}' LIMIT 1`;
-    const accountResponse = await fetch(
-      `${queryUrl}?q=${encodeURIComponent(accountQuery)}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (accountResponse.ok) {
-      const accountData = await accountResponse.json();
-      if (accountData.totalSize > 0) {
-        const record = accountData.records[0];
-        console.log('⚠️ Duplicate Account found:', record.Id);
-        return {
-          isDuplicate: true,
-          recordType: 'Account',
-          salesforceId: record.Id,
-          recordName: record.Name,
-          recordEmail: record.PersonEmail,
-        };
-      }
-    }
-    
-    return { isDuplicate: false };
+    return data;
   } catch (error) {
     console.warn('⚠️ Duplicate check error:', error);
-    return { isDuplicate: false }; // Proceed with sync if check fails
+    return { isDuplicate: false };
   }
 };
 
-// Verify if a record exists in Salesforce by ID
+// Verify if a record exists in Salesforce by ID via Edge Function
 export const verifySalesforceRecord = async (
   recordId: string
 ): Promise<{ exists: boolean; recordUrl?: string; error?: string }> => {
   try {
-    const accessToken = await authenticateSalesforce();
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
     
-    // Query for the specific record
-    const queryUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/sobjects/Lead/${recordId}`;
-    
-    const response = await fetch(queryUrl, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+    const { data, error } = await supabase.functions.invoke('salesforce-sync', {
+      body: { action: 'verify_record', data: { recordId } },
     });
-
-    if (response.ok) {
-      const recordUrl = `${SALESFORCE_CONFIG.instanceUrl}/lightning/r/Lead/${recordId}/view`;
-      return { exists: true, recordUrl };
-    } else if (response.status === 404) {
-      return { exists: false, error: 'Record not found in Salesforce' };
-    } else {
-      const errorText = await response.text();
-      return { exists: false, error: `Verification failed: ${response.status} - ${errorText}` };
+    
+    if (error) {
+      return { exists: false, error: String(error) };
     }
+    
+    return data;
   } catch (error) {
     return { exists: false, error: String(error) };
   }
 };
 
-// Sync survey to Salesforce as a Lead
+// Sync survey to Salesforce as a Lead via Edge Function
 export const syncToSalesforce = async (
   survey: Survey
 ): Promise<{ 
@@ -391,13 +291,10 @@ export const syncToSalesforce = async (
   try {
     console.log('🔄 Starting Salesforce sync for survey:', survey.id);
     
-    // Authenticate
-    const accessToken = await authenticateSalesforce();
-    
     // Check for duplicates if phone number exists
     const phone = formatPhoneNumber(survey.answers.phone || '');
     if (phone) {
-      const duplicateCheck = await checkSalesforceDuplicate(accessToken, phone);
+      const duplicateCheck = await checkSalesforceDuplicate(phone);
       if (duplicateCheck.isDuplicate) {
         console.log(`⚠️ Duplicate ${duplicateCheck.recordType} found in Salesforce:`, duplicateCheck.salesforceId);
         return { 
@@ -414,32 +311,30 @@ export const syncToSalesforce = async (
     }
     
     // Map survey data to Salesforce fields
-    const salesforceData = await mapSurveyToSalesforceFields(survey);
+    const leadData = await mapSurveyToSalesforceFields(survey);
     
-    // Create Lead in Salesforce
-    const createUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/sobjects/Lead`;
+    // Create Lead via Edge Function
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
     
-    const response = await fetch(createUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(salesforceData),
+    const { data, error } = await supabase.functions.invoke('salesforce-sync', {
+      body: { action: 'create_lead', data: { leadData } },
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Salesforce sync failed: ${response.status} - ${errorText}`);
+    
+    if (error) {
+      throw new Error(`Salesforce sync failed: ${error.message || String(error)}`);
     }
-
-    const result = await response.json();
-    console.log('✅ Survey synced to Salesforce:', result.id);
+    
+    if (!data.success) {
+      throw new Error('Salesforce sync failed: Unknown error');
+    }
+    
+    console.log('✅ Survey synced to Salesforce:', data.salesforceId);
     
     return { 
       success: true, 
       isDuplicate: false,
-      salesforceId: result.id,
+      salesforceId: data.salesforceId,
     };
   } catch (error) {
     console.error('❌ Salesforce sync error:', error);
@@ -818,7 +713,7 @@ export const testTwilioConnection = async () => {
   }
 };
 
-// Delete a Lead record in Salesforce
+// Delete a Lead record in Salesforce via Edge Function
 export const deleteSalesforceRecord = async (
   recordId: string,
   recordType: 'Lead' | 'Account'
@@ -826,22 +721,17 @@ export const deleteSalesforceRecord = async (
   try {
     console.log(`🗑️ Deleting ${recordType} in Salesforce:`, recordId);
     
-    const accessToken = await authenticateSalesforce();
-    const deleteUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/sobjects/${recordType}/${recordId}`;
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
     
-    const response = await fetch(deleteUrl, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+    const { data, error } = await supabase.functions.invoke('salesforce-sync', {
+      body: { action: 'delete_record', data: { recordId, recordType } },
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Salesforce delete failed: ${response.status} - ${errorText}`);
+    
+    if (error) {
+      return { success: false, error: String(error) };
     }
-
+    
     console.log(`✅ ${recordType} deleted successfully`);
     return { success: true };
   } catch (error) {
@@ -946,31 +836,21 @@ export const testSendGridConnection = async () => {
   }
 };
 
-// Test Salesforce connection
+// Test Salesforce connection via Edge Function
 export const testSalesforceConnection = async () => {
   try {
-    const accessToken = await authenticateSalesforce();
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
     
-    // Query to test connection
-    const queryUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/query`;
-    const query = 'SELECT Id FROM Lead LIMIT 1';
+    const { data, error } = await supabase.functions.invoke('salesforce-sync', {
+      body: { action: 'test_connection' },
+    });
     
-    const response = await fetch(
-      `${queryUrl}?q=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    
-    if (response.ok) {
-      return { success: true, message: 'Salesforce connection successful' };
-    } else {
-      const errorText = await response.text();
-      return { success: false, message: `HTTP ${response.status}: ${errorText}` };
+    if (error) {
+      return { success: false, message: String(error) };
     }
+    
+    return data;
   } catch (error) {
     return { success: false, message: String(error) };
   }
