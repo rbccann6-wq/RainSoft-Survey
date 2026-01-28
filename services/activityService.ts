@@ -1,5 +1,6 @@
 // Activity tracking service for monitoring employee activity
 import { getSupabaseClient } from '@/template';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StorageService from './storageService';
 import * as NotificationService from './notificationService';
 import { Employee } from '@/types';
@@ -245,42 +246,83 @@ export const forceClockOut = async (
   reason: string
 ): Promise<boolean> => {
   try {
-    const { error } = await supabase
-      .from('time_entries')
-      .update({
-        clock_out: new Date().toISOString(),
-        is_active_in_kiosk: false,
-      })
-      .eq('id', timeEntryId);
-
-    if (error) {
-      console.error('Failed to force clock out:', error);
+    console.log(`🔄 Force clocking out time entry: ${timeEntryId}`);
+    
+    // CRITICAL FIX: Handle both database and local storage entries
+    // First try to get the time entry from local storage (includes both synced and unsynced)
+    const allTimeEntries = await StorageService.getTimeEntries();
+    const timeEntry = allTimeEntries.find(entry => entry.id === timeEntryId);
+    
+    if (!timeEntry) {
+      console.error('❌ Time entry not found:', timeEntryId);
       return false;
+    }
+    
+    console.log('📝 Time entry found:', {
+      id: timeEntry.id,
+      employeeId: timeEntry.employeeId,
+      isTemp: timeEntry.id.startsWith('temp_'),
+    });
+    
+    // Check if this is a temporary (unsynced) entry
+    const isLocalOnly = timeEntry.id.startsWith('temp_');
+    
+    if (isLocalOnly) {
+      // Entry is still in local storage only - update it there
+      console.log('📱 Updating local storage entry...');
+      
+      const updatedEntries = allTimeEntries.map(entry => {
+        if (entry.id === timeEntryId) {
+          return {
+            ...entry,
+            clockOut: new Date().toISOString(),
+            isActiveInKiosk: false,
+          };
+        }
+        return entry;
+      });
+      
+      // Save back to local storage
+      const KEYS = {
+        LOCAL_TIME_ENTRIES: 'local_time_entries_failsafe',
+      };
+      await AsyncStorage.setItem(KEYS.LOCAL_TIME_ENTRIES, JSON.stringify(updatedEntries.filter(e => e.id.startsWith('temp_'))));
+      console.log('✅ Local entry clocked out successfully');
+    } else {
+      // Entry exists in database - update it there
+      console.log('☁️ Updating database entry...');
+      
+      const { error } = await supabase
+        .from('time_entries')
+        .update({
+          clock_out: new Date().toISOString(),
+          is_active_in_kiosk: false,
+        })
+        .eq('id', timeEntryId);
+
+      if (error) {
+        console.error('❌ Database update failed:', error);
+        return false;
+      }
+      console.log('✅ Database entry clocked out successfully');
     }
 
     // Log the action
-    const { data: timeEntry } = await supabase
-      .from('time_entries')
-      .select('employee_id, clock_in')
-      .eq('id', timeEntryId)
-      .single();
+    await logInactivity(
+      timeEntry.employeeId,
+      timeEntryId,
+      timeEntry.clockIn,
+      0,
+      undefined,
+      'force_clocked_out',
+      adminId,
+      reason
+    );
 
-    if (timeEntry) {
-      await logInactivity(
-        timeEntry.employee_id,
-        timeEntryId,
-        timeEntry.clock_in,
-        0,
-        undefined,
-        'force_clocked_out',
-        adminId,
-        reason
-      );
-    }
-
+    console.log('✅ Force clock out completed');
     return true;
   } catch (error) {
-    console.error('Error force clocking out:', error);
+    console.error('❌ Error force clocking out:', error);
     return false;
   }
 };
