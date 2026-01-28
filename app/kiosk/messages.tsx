@@ -1,24 +1,21 @@
-// Messages screen for employees - Full conversation view
+// Modern iPhone Messages-style UI for employee messaging
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useApp } from '@/hooks/useApp';
 import * as StorageService from '@/services/storageService';
 import { SPACING, FONTS, LOWES_THEME } from '@/constants/theme';
 import { Message } from '@/types';
-import { formatDateTime12Hour } from '@/utils/timeFormat';
 
 export default function MessagesScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { currentUser, employees, messages, loadData } = useApp();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const [showCompose, setShowCompose] = useState(false);
-  const [selectedRecipient, setSelectedRecipient] = useState<string>('');
-  const [newMessage, setNewMessage] = useState('');
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [messageText, setMessageText] = useState('');
+  const flatListRef = useRef<FlatList>(null);
 
   const myMessages = messages.filter(m => 
     m.isGroupMessage || m.recipientIds.includes(currentUser!.id) || m.senderId === currentUser!.id
@@ -30,9 +27,8 @@ export default function MessagesScreen() {
     
     myMessages.forEach(msg => {
       if (msg.isGroupMessage) {
-        const key = 'group';
-        if (!convMap.has(key)) convMap.set(key, []);
-        convMap.get(key)!.push(msg);
+        if (!convMap.has('group')) convMap.set('group', []);
+        convMap.get('group')!.push(msg);
       } else {
         const otherPerson = msg.senderId === currentUser!.id
           ? msg.recipientIds[0]
@@ -42,27 +38,45 @@ export default function MessagesScreen() {
       }
     });
     
+    // Sort messages by timestamp within each conversation
+    convMap.forEach((msgs) => {
+      msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    });
+    
     return convMap;
   }, [myMessages, currentUser]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when opening conversation or new message arrives
   useEffect(() => {
-    if (selectedConversation && scrollViewRef.current) {
+    if (selectedConversation && flatListRef.current) {
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
   }, [selectedConversation, conversations]);
 
-  const sendReply = async () => {
-    if (!replyText.trim() || !selectedConversation) return;
+  // Mark messages as read
+  useEffect(() => {
+    if (selectedConversation) {
+      const msgs = conversations.get(selectedConversation) || [];
+      msgs.forEach(msg => {
+        if (msg.senderId !== currentUser!.id && !msg.readBy.includes(currentUser!.id)) {
+          StorageService.markMessageAsRead(msg.id, currentUser!.id);
+        }
+      });
+      loadData();
+    }
+  }, [selectedConversation]);
+
+  const sendMessage = async () => {
+    if (!messageText.trim() || !selectedConversation) return;
 
     const message: Message = {
       id: Date.now().toString(),
       senderId: currentUser!.id,
       senderName: `${currentUser!.firstName} ${currentUser!.lastName}`,
       recipientIds: selectedConversation === 'group' ? [] : [selectedConversation],
-      content: replyText,
+      content: messageText.trim(),
       timestamp: new Date().toISOString(),
       readBy: [currentUser!.id],
       reactions: {},
@@ -71,330 +85,295 @@ export default function MessagesScreen() {
 
     await StorageService.addMessage(message);
     await loadData();
-    setReplyText('');
+    setMessageText('');
+    Keyboard.dismiss();
+    
+    // Scroll to bottom after sending
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
-  const sendNewMessage = async () => {
-    if (!newMessage.trim() || !selectedRecipient) return;
-
-    const message: Message = {
-      id: Date.now().toString(),
-      senderId: currentUser!.id,
-      senderName: `${currentUser!.firstName} ${currentUser!.lastName}`,
-      recipientIds: selectedRecipient === 'group' ? [] : [selectedRecipient],
-      content: newMessage,
-      timestamp: new Date().toISOString(),
-      readBy: [currentUser!.id],
-      reactions: {},
-      isGroupMessage: selectedRecipient === 'group',
-    };
-
-    await StorageService.addMessage(message);
-    await loadData();
-    setNewMessage('');
-    setShowCompose(false);
-    setSelectedRecipient('');
-    // Open the new conversation
-    setSelectedConversation(selectedRecipient);
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    
+    const hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    
+    return `${displayHours}:${minutes} ${ampm}`;
   };
 
-  const markAsRead = async (messageId: string) => {
-    await StorageService.markMessageAsRead(messageId, currentUser!.id);
-    await loadData();
-  };
-
+  // Conversation View
   if (selectedConversation) {
-    const msgs = selectedConversation === 'group'
-      ? conversations.get('group')!
-      : conversations.get(selectedConversation)!;
-
+    const msgs = conversations.get(selectedConversation) || [];
     const conversationName = selectedConversation === 'group'
       ? 'All Employees'
       : (() => {
-          const otherPerson = employees.find(e => e.id === selectedConversation);
-          return otherPerson ? `${otherPerson.firstName} ${otherPerson.lastName}` : 'Unknown';
+          const person = employees.find(e => e.id === selectedConversation);
+          return person ? `${person.firstName} ${person.lastName}` : 'Unknown';
         })();
 
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <KeyboardAvoidingView 
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <Pressable onPress={() => setSelectedConversation(null)} style={styles.backButton}>
-              <MaterialIcons name="arrow-back" size={24} color={LOWES_THEME.primary} />
+          {/* iPhone-style Header */}
+          <View style={styles.conversationHeader}>
+            <Pressable 
+              onPress={() => setSelectedConversation(null)}
+              style={styles.backButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialIcons name="chevron-left" size={32} color="#007AFF" />
+              <Text style={styles.backText}>Back</Text>
             </Pressable>
-            <View style={styles.headerInfo}>
-              <Text style={styles.headerTitle}>{conversationName}</Text>
+            
+            <View style={styles.conversationTitle}>
+              <Text style={styles.conversationName} numberOfLines={1}>
+                {conversationName}
+              </Text>
               {selectedConversation === 'group' && (
-                <Text style={styles.headerSubtitle}>Group Message</Text>
+                <Text style={styles.conversationSubtitle}>
+                  {employees.length} members
+                </Text>
               )}
             </View>
+            
+            <View style={styles.headerRight} />
           </View>
 
-          {/* Messages */}
-          <ScrollView 
-            ref={scrollViewRef}
-            contentContainerStyle={styles.messageList}
-          >
-            {msgs.map(msg => {
+          {/* Messages List */}
+          <FlatList
+            ref={flatListRef}
+            data={msgs}
+            keyExtractor={item => item.id}
+            contentContainerStyle={[
+              styles.messagesList,
+              { paddingBottom: insets.bottom + 60 }
+            ]}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            renderItem={({ item: msg, index }) => {
               const isMe = msg.senderId === currentUser!.id;
-              
-              // Mark as read
-              if (!isMe && !msg.readBy.includes(currentUser!.id)) {
-                markAsRead(msg.id);
-              }
+              const showSender = selectedConversation === 'group' && !isMe;
+              const prevMsg = index > 0 ? msgs[index - 1] : null;
+              const showTimestamp = !prevMsg || 
+                new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() > 5 * 60 * 1000;
 
               return (
-                <View
-                  key={msg.id}
-                  style={[
-                    styles.messageBubble,
-                    isMe ? styles.myMessage : styles.theirMessage,
-                  ]}
-                >
-                  {!isMe && selectedConversation === 'group' && (
-                    <Text style={styles.messageSender}>{msg.senderName}</Text>
+                <View>
+                  {showTimestamp && (
+                    <View style={styles.timestampContainer}>
+                      <Text style={styles.timestamp}>{formatTime(msg.timestamp)}</Text>
+                    </View>
                   )}
-                  <Text style={[
-                    styles.messageText,
-                    isMe && styles.myMessageText,
+                  
+                  <View style={[
+                    styles.messageBubbleContainer,
+                    isMe ? styles.myMessageContainer : styles.theirMessageContainer
                   ]}>
-                    {msg.content}
-                  </Text>
-                  <View style={styles.messageFooter}>
-                    <Text style={[
-                      styles.messageTime,
-                      isMe && styles.myMessageTime,
+                    <View style={[
+                      styles.messageBubble,
+                      isMe ? styles.myBubble : styles.theirBubble
                     ]}>
-                      {formatDateTime12Hour(msg.timestamp)}
-                    </Text>
-                    {/* Read Status */}
-                    {selectedConversation === 'group' && msg.readBy.length > 1 && (
+                      {showSender && (
+                        <Text style={styles.senderName}>{msg.senderName}</Text>
+                      )}
                       <Text style={[
-                        styles.readStatus,
-                        isMe && styles.myReadStatus,
+                        styles.messageText,
+                        isMe ? styles.myMessageText : styles.theirMessageText
                       ]}>
-                        Read by {msg.readBy.length - 1}
+                        {msg.content}
                       </Text>
-                    )}
-                    {selectedConversation !== 'group' && !isMe && msg.readBy.includes(currentUser!.id) && (
-                      <MaterialIcons name="done-all" size={14} color="#4CAF50" />
-                    )}
-                    {selectedConversation !== 'group' && isMe && msg.readBy.length > 1 && (
-                      <MaterialIcons name="done-all" size={14} color="rgba(255, 255, 255, 0.9)" />
-                    )}
+                    </View>
                   </View>
                 </View>
               );
-            })}
-          </ScrollView>
+            }}
+          />
 
-          {/* Reply Input */}
-          <View style={styles.replyContainer}>
-            <TextInput
-              style={styles.replyInput}
-              value={replyText}
-              onChangeText={setReplyText}
-              placeholder="Type a reply..."
-              multiline
-              maxLength={500}
-            />
-            <Pressable
-              style={[
-                styles.sendButton,
-                !replyText.trim() && styles.sendButtonDisabled,
-              ]}
-              onPress={sendReply}
-              disabled={!replyText.trim()}
-            >
-              <MaterialIcons 
-                name="send" 
-                size={24} 
-                color={replyText.trim() ? LOWES_THEME.primary : '#CCCCCC'} 
+          {/* iPhone-style Input Bar */}
+          <View style={[
+            styles.inputBar,
+            { paddingBottom: Math.max(insets.bottom, SPACING.sm) }
+          ]}>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={messageText}
+                onChangeText={setMessageText}
+                placeholder="Message"
+                placeholderTextColor="#8E8E93"
+                multiline
+                maxLength={1000}
+                returnKeyType="send"
+                blurOnSubmit={false}
+                onSubmitEditing={sendMessage}
               />
-            </Pressable>
+              
+              <Pressable
+                onPress={sendMessage}
+                disabled={!messageText.trim()}
+                style={[
+                  styles.sendButton,
+                  !messageText.trim() && styles.sendButtonDisabled
+                ]}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons 
+                  name="arrow-upward" 
+                  size={20} 
+                  color="#FFFFFF" 
+                />
+              </Pressable>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
-  // Conversation list view
+  // Conversations List View
+  const conversationsList = Array.from(conversations.entries()).map(([key, msgs]) => {
+    const lastMsg = msgs[msgs.length - 1];
+    const unreadCount = msgs.filter(m => 
+      m.senderId !== currentUser!.id && !m.readBy.includes(currentUser!.id)
+    ).length;
+    
+    if (key === 'group') {
+      return {
+        id: 'group',
+        name: 'All Employees',
+        subtitle: `${employees.length} members`,
+        avatar: '👥',
+        lastMessage: lastMsg.content,
+        timestamp: lastMsg.timestamp,
+        unreadCount,
+        isGroup: true,
+      };
+    } else {
+      const person = employees.find(e => e.id === key);
+      if (!person) return null;
+      
+      return {
+        id: key,
+        name: `${person.firstName} ${person.lastName}`,
+        subtitle: person.role,
+        avatar: `${person.firstName[0]}${person.lastName[0]}`,
+        lastMessage: lastMsg.content,
+        timestamp: lastMsg.timestamp,
+        unreadCount,
+        isGroup: false,
+      };
+    }
+  }).filter(Boolean).sort((a, b) => 
+    new Date(b!.timestamp).getTime() - new Date(a!.timestamp).getTime()
+  );
+
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color={LOWES_THEME.primary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <Pressable
-            style={styles.newMessageButton}
-            onPress={() => setShowCompose(!showCompose)}
-          >
-            <MaterialIcons name="add" size={20} color="#FFFFFF" />
-            <Text style={styles.newMessageButtonText}>New Message</Text>
-          </Pressable>
-        </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* iPhone-style Header */}
+      <View style={styles.listHeader}>
+        <Pressable 
+          onPress={() => router.back()}
+          style={styles.headerBackButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialIcons name="chevron-left" size={32} color="#007AFF" />
+        </Pressable>
+        
+        <Text style={styles.listTitle}>Messages</Text>
+        
+        <View style={styles.headerRight} />
+      </View>
 
-        {/* Compose New Message */}
-        {showCompose && (
-          <View style={styles.composeContainer}>
-            <Text style={styles.composeTitle}>New Message</Text>
-            
-            {/* Recipient Selection */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recipientScroll}>
-              <Pressable
-                style={[
-                  styles.recipientChip,
-                  selectedRecipient === 'group' && styles.recipientSelected,
-                ]}
-                onPress={() => setSelectedRecipient('group')}
-              >
-                <MaterialIcons name="group" size={16} color="#FFFFFF" />
-                <Text style={styles.recipientText}>All Staff</Text>
-              </Pressable>
-              
-              {employees
-                .filter(e => e.id !== currentUser!.id && e.status === 'active' && (e.role === 'admin' || e.role === 'manager'))
-                .map(emp => (
-                  <Pressable
-                    key={emp.id}
-                    style={[
-                      styles.recipientChip,
-                      selectedRecipient === emp.id && styles.recipientSelected,
-                    ]}
-                    onPress={() => setSelectedRecipient(emp.id)}
-                  >
-                    <Text style={styles.recipientText}>
-                      {emp.firstName} {emp.lastName}
-                    </Text>
-                  </Pressable>
-                ))}
-            </ScrollView>
-
-            {/* Message Input */}
-            <TextInput
-              style={styles.composeInput}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Type your message..."
-              multiline
-              numberOfLines={3}
-            />
-
-            <View style={styles.composeActions}>
-              <Pressable
-                style={styles.cancelButton}
-                onPress={() => {
-                  setShowCompose(false);
-                  setNewMessage('');
-                  setSelectedRecipient('');
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.sendMessageButton,
-                  (!selectedRecipient || !newMessage.trim()) && styles.sendMessageButtonDisabled,
-                ]}
-                onPress={sendNewMessage}
-                disabled={!selectedRecipient || !newMessage.trim()}
-              >
-                <Text style={styles.sendMessageButtonText}>Send</Text>
-              </Pressable>
-            </View>
+      {conversationsList.length === 0 ? (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <MaterialIcons name="chat-bubble-outline" size={64} color="#C7C7CC" />
           </View>
-        )}
+          <Text style={styles.emptyTitle}>No Messages</Text>
+          <Text style={styles.emptySubtitle}>
+            You don't have any messages yet.{'\n'}Start a conversation with your team.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={conversationsList}
+          keyExtractor={item => item!.id}
+          contentContainerStyle={styles.conversationsContent}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item: conv }) => {
+            if (!conv) return null;
+            
+            return (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.conversationRow,
+                  pressed && styles.conversationRowPressed
+                ]}
+                onPress={() => setSelectedConversation(conv.id)}
+              >
+                {/* Avatar */}
+                <View style={[
+                  styles.avatar,
+                  conv.isGroup && styles.groupAvatar
+                ]}>
+                  <Text style={styles.avatarText}>{conv.avatar}</Text>
+                </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
-          {conversations.size === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="mail-outline" size={64} color={LOWES_THEME.textSubtle} />
-              <Text style={styles.emptyText}>No messages</Text>
-            </View>
-          ) : (
-            <View style={styles.conversationList}>
-              {/* Group Messages */}
-              {conversations.has('group') && (
-                <Pressable
-                  style={styles.conversationCard}
-                  onPress={() => setSelectedConversation('group')}
-                >
-                  <View style={[styles.avatar, { backgroundColor: LOWES_THEME.primary }]}>
-                    <MaterialIcons name="group" size={24} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.conversationInfo}>
-                    <View style={styles.conversationHeader}>
-                      <Text style={styles.conversationName}>All Employees</Text>
-                      <View style={styles.groupBadge}>
-                        <Text style={styles.groupText}>Group</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.lastMessage} numberOfLines={1}>
-                      {conversations.get('group')![conversations.get('group')!.length - 1].content}
+                {/* Conversation Info */}
+                <View style={styles.conversationContent}>
+                  <View style={styles.conversationTop}>
+                    <Text style={styles.conversationNameText} numberOfLines={1}>
+                      {conv.name}
+                    </Text>
+                    <Text style={styles.conversationTime}>
+                      {formatTime(conv.timestamp)}
                     </Text>
                   </View>
-                  <MaterialIcons name="chevron-right" size={24} color="#CCCCCC" />
-                </Pressable>
-              )}
-
-              {/* Direct Messages */}
-              {Array.from(conversations.entries())
-                .filter(([key]) => key !== 'group')
-                .map(([personId, msgs]) => {
-                  const person = employees.find(e => e.id === personId);
-                  if (!person) return null;
                   
-                  const unreadCount = msgs.filter(m => 
-                    m.senderId !== currentUser!.id && !m.readBy.includes(currentUser!.id)
-                  ).length;
-
-                  return (
-                    <Pressable
-                      key={personId}
+                  <View style={styles.conversationBottom}>
+                    <Text 
                       style={[
-                        styles.conversationCard,
-                        unreadCount > 0 && styles.unreadCard,
+                        styles.lastMessageText,
+                        conv.unreadCount > 0 && styles.unreadMessageText
                       ]}
-                      onPress={() => setSelectedConversation(personId)}
+                      numberOfLines={2}
                     >
-                      <View style={[styles.avatar, { backgroundColor: '#FF9800' }]}>
-                        <Text style={styles.avatarText}>
-                          {person.firstName[0]}{person.lastName[0]}
-                        </Text>
+                      {conv.lastMessage}
+                    </Text>
+                    
+                    {conv.unreadCount > 0 && (
+                      <View style={styles.unreadBadge}>
+                        <Text style={styles.unreadCount}>{conv.unreadCount}</Text>
                       </View>
-                      <View style={styles.conversationInfo}>
-                        <Text style={styles.conversationName}>
-                          {person.firstName} {person.lastName}
-                        </Text>
-                        <Text style={styles.lastMessage} numberOfLines={1}>
-                          {msgs[msgs.length - 1].content}
-                        </Text>
-                      </View>
-                      <View style={styles.rightInfo}>
-                        {unreadCount > 0 && (
-                          <View style={styles.unreadBadge}>
-                            <Text style={styles.unreadText}>{unreadCount}</Text>
-                          </View>
-                        )}
-                        <MaterialIcons name="chevron-right" size={24} color="#CCCCCC" />
-                      </View>
-                    </Pressable>
-                  );
-                })}
-            </View>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+                    )}
+                  </View>
+                </View>
+
+                {/* Chevron */}
+                <MaterialIcons 
+                  name="chevron-right" 
+                  size={20} 
+                  color="#C7C7CC" 
+                  style={styles.chevron}
+                />
+              </Pressable>
+            );
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -402,278 +381,278 @@ export default function MessagesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: LOWES_THEME.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: LOWES_THEME.border,
     backgroundColor: '#FFFFFF',
   },
-  backButton: {
-    padding: SPACING.sm,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: '700',
-    color: LOWES_THEME.text,
-  },
-  headerSubtitle: {
-    fontSize: FONTS.sizes.sm,
-    color: LOWES_THEME.textSubtle,
-  },
-  content: {
-    padding: SPACING.lg,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl * 2,
-    gap: SPACING.md,
-  },
-  emptyText: {
-    fontSize: FONTS.sizes.lg,
-    color: LOWES_THEME.textSubtle,
-  },
-  conversationList: {
-    gap: SPACING.sm,
-  },
-  conversationCard: {
+  
+  // List View Styles
+  listHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
-    backgroundColor: LOWES_THEME.surface,
-    padding: SPACING.md,
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#C6C6C8',
+    backgroundColor: '#F9F9F9',
   },
-  unreadCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: LOWES_THEME.primary,
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 80,
+  },
+  listTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000000',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerRight: {
+    width: 80,
+  },
+  conversationsContent: {
+    paddingBottom: SPACING.lg,
+  },
+  conversationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: '#FFFFFF',
+  },
+  conversationRowPressed: {
+    backgroundColor: '#F2F2F7',
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#C6C6C8',
+    marginLeft: 88,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  groupAvatar: {
+    backgroundColor: '#34C759',
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
   },
-  conversationInfo: {
+  conversationContent: {
     flex: 1,
     gap: 4,
   },
-  conversationHeader: {
+  conversationTop: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  conversationNameText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000000',
+    flex: 1,
+  },
+  conversationTime: {
+    fontSize: 15,
+    color: '#8E8E93',
+    marginLeft: SPACING.sm,
+  },
+  conversationBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     gap: SPACING.sm,
   },
-  conversationName: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: '600',
-    color: LOWES_THEME.text,
+  lastMessageText: {
+    fontSize: 15,
+    color: '#8E8E93',
+    flex: 1,
+    lineHeight: 20,
   },
-  groupBadge: {
-    backgroundColor: LOWES_THEME.primary,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  groupText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '600',
-  },
-  lastMessage: {
-    fontSize: FONTS.sizes.sm,
-    color: LOWES_THEME.textSubtle,
-  },
-  rightInfo: {
-    alignItems: 'center',
-    gap: SPACING.xs,
+  unreadMessageText: {
+    fontWeight: '500',
+    color: '#000000',
   },
   unreadBadge: {
-    backgroundColor: LOWES_THEME.error,
+    backgroundColor: '#007AFF',
     borderRadius: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     minWidth: 20,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  unreadText: {
+  unreadCount: {
     color: '#FFFFFF',
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
-  messageList: {
-    padding: SPACING.lg,
-    gap: SPACING.md,
+  chevron: {
+    marginLeft: SPACING.xs,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xxl,
+    paddingBottom: 100,
+  },
+  emptyIcon: {
+    marginBottom: SPACING.lg,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: SPACING.sm,
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  
+  // Conversation View Styles
+  conversationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#C6C6C8',
+    backgroundColor: '#F9F9F9',
+    minHeight: 44,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: SPACING.sm,
+  },
+  backText: {
+    fontSize: 17,
+    color: '#007AFF',
+    marginLeft: 4,
+  },
+  conversationTitle: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  conversationName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  conversationSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  messagesList: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+  },
+  timestampContainer: {
+    alignItems: 'center',
+    marginVertical: SPACING.md,
+  },
+  timestamp: {
+    fontSize: 13,
+    color: '#8E8E93',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  messageBubbleContainer: {
+    marginVertical: 2,
+    maxWidth: '75%',
+  },
+  myMessageContainer: {
+    alignSelf: 'flex-end',
+  },
+  theirMessageContainer: {
+    alignSelf: 'flex-start',
   },
   messageBubble: {
-    maxWidth: '75%',
-    padding: SPACING.md,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
   },
-  myMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: LOWES_THEME.primary,
+  myBubble: {
+    backgroundColor: '#007AFF',
+    borderBottomRightRadius: 4,
   },
-  theirMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F0F0F0',
+  theirBubble: {
+    backgroundColor: '#E9E9EB',
+    borderBottomLeftRadius: 4,
   },
-  messageSender: {
-    fontSize: FONTS.sizes.xs,
+  senderName: {
+    fontSize: 12,
     fontWeight: '600',
-    color: LOWES_THEME.text,
-    marginBottom: 4,
+    color: '#000000',
+    marginBottom: 2,
   },
   messageText: {
-    fontSize: FONTS.sizes.md,
-    color: LOWES_THEME.text,
-    lineHeight: 20,
+    fontSize: 17,
+    lineHeight: 22,
   },
   myMessageText: {
     color: '#FFFFFF',
   },
-  messageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+  theirMessageText: {
+    color: '#000000',
   },
-  messageTime: {
-    fontSize: FONTS.sizes.xs,
-    color: LOWES_THEME.textSubtle,
+  
+  // Input Bar Styles
+  inputBar: {
+    backgroundColor: '#F9F9F9',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#C6C6C8',
+    paddingHorizontal: SPACING.sm,
+    paddingTop: SPACING.sm,
   },
-  myMessageTime: {
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  readStatus: {
-    fontSize: FONTS.sizes.xs,
-    color: '#4CAF50',
-    fontWeight: '600',
-  },
-  myReadStatus: {
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  newMessageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: LOWES_THEME.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 20,
-  },
-  newMessageButtonText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-  },
-  composeContainer: {
-    backgroundColor: '#F0F7FF',
-    padding: SPACING.lg,
-    gap: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: LOWES_THEME.border,
-  },
-  composeTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '600',
-    color: LOWES_THEME.text,
-  },
-  recipientScroll: {
-    flexGrow: 0,
-  },
-  recipientChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: '#CCCCCC',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 20,
-    marginRight: SPACING.sm,
-  },
-  recipientSelected: {
-    backgroundColor: LOWES_THEME.primary,
-  },
-  recipientText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-  },
-  composeInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: SPACING.md,
-    fontSize: FONTS.sizes.md,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  composeActions: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    justifyContent: 'flex-end',
-  },
-  cancelButton: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: LOWES_THEME.border,
-  },
-  cancelButtonText: {
-    color: LOWES_THEME.text,
-    fontSize: FONTS.sizes.md,
-    fontWeight: '600',
-  },
-  sendMessageButton: {
-    backgroundColor: LOWES_THEME.primary,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: 8,
-  },
-  sendMessageButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendMessageButtonText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.sizes.md,
-    fontWeight: '600',
-  },
-  replyContainer: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: SPACING.sm,
-    padding: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: LOWES_THEME.border,
     backgroundColor: '#FFFFFF',
-  },
-  replyInput: {
-    flex: 1,
-    maxHeight: 100,
-    backgroundColor: '#F8F8F8',
     borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#C6C6C8',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: FONTS.sizes.md,
+    paddingVertical: SPACING.xs,
+    minHeight: 36,
+    maxHeight: 100,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 17,
+    color: '#000000',
+    maxHeight: 80,
+    paddingTop: Platform.OS === 'ios' ? 8 : 4,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 4,
   },
   sendButton: {
-    padding: SPACING.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: SPACING.sm,
+    marginBottom: 2,
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
 });
