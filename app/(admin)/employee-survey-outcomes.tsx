@@ -19,7 +19,6 @@ interface EmployeeOutcomeStats {
   total_install: number;
   total_demo: number;
   total_surveys: number;
-  qualified_count: number;
   install_rate: number;
   latest_sync: string | null;
 }
@@ -66,7 +65,7 @@ export default function EmployeeSurveyOutcomesScreen() {
   const [loading, setLoading] = useState(true);
   const [employeeStats, setEmployeeStats] = useState<EmployeeOutcomeStats[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
-  const [sortBy, setSortBy] = useState<'name' | 'qualified' | 'install' | 'install_rate'>('qualified');
+  const [sortBy, setSortBy] = useState<'name' | 'install' | 'install_rate' | 'demo' | 'dead'>('install');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
 
@@ -129,7 +128,6 @@ export default function EmployeeSurveyOutcomesScreen() {
           latest_sync: null,
         });
 
-        const qualified = totals.total_install + totals.total_still_contacting;
         const installRate = totals.total_surveys > 0 
           ? (totals.total_install / totals.total_surveys) * 100 
           : 0;
@@ -138,7 +136,6 @@ export default function EmployeeSurveyOutcomesScreen() {
           employee_id: employee.id,
           employee_name: `${employee.firstName} ${employee.lastName}`,
           ...totals,
-          qualified_count: qualified,
           install_rate: installRate,
         };
       });
@@ -168,14 +165,17 @@ export default function EmployeeSurveyOutcomesScreen() {
         case 'name':
           compareValue = a.employee_name.localeCompare(b.employee_name);
           break;
-        case 'qualified':
-          compareValue = a.qualified_count - b.qualified_count;
-          break;
         case 'install':
           compareValue = a.total_install - b.total_install;
           break;
         case 'install_rate':
           compareValue = a.install_rate - b.install_rate;
+          break;
+        case 'demo':
+          compareValue = a.total_demo - b.total_demo;
+          break;
+        case 'dead':
+          compareValue = a.total_dead - b.total_dead;
           break;
       }
       
@@ -206,7 +206,6 @@ export default function EmployeeSurveyOutcomesScreen() {
       total_install: acc.total_install + curr.total_install,
       total_demo: acc.total_demo + curr.total_demo,
       total_surveys: acc.total_surveys + curr.total_surveys,
-      qualified_count: acc.qualified_count + curr.qualified_count,
     }), {
       total_bad_contact: 0,
       total_dead: 0,
@@ -214,7 +213,6 @@ export default function EmployeeSurveyOutcomesScreen() {
       total_install: 0,
       total_demo: 0,
       total_surveys: 0,
-      qualified_count: 0,
     });
   };
 
@@ -243,18 +241,6 @@ export default function EmployeeSurveyOutcomesScreen() {
         ),
       },
       {
-        key: 'qualified',
-        label: 'Qualified',
-        width: 100,
-        render: (item) => (
-          <View style={styles.tableStatContainer}>
-            <Text style={[styles.tableStatValue, { color: '#4CAF50' }]}>
-              {item.qualified_count}
-            </Text>
-          </View>
-        ),
-      },
-      {
         key: 'install',
         label: 'Install',
         width: 100,
@@ -263,6 +249,19 @@ export default function EmployeeSurveyOutcomesScreen() {
             <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
             <Text style={[styles.tableStatValue, { color: '#4CAF50' }]}>
               {item.total_install}
+            </Text>
+          </View>
+        ),
+      },
+      {
+        key: 'demo',
+        label: 'Demo',
+        width: 100,
+        render: (item) => (
+          <View style={styles.tableStatContainer}>
+            <MaterialIcons name="play-circle-outline" size={16} color="#2196F3" />
+            <Text style={[styles.tableStatValue, { color: '#2196F3' }]}>
+              {item.total_demo}
             </Text>
           </View>
         ),
@@ -289,19 +288,6 @@ export default function EmployeeSurveyOutcomesScreen() {
             <MaterialIcons name="cancel" size={16} color="#F44336" />
             <Text style={[styles.tableStatValue, { color: '#F44336' }]}>
               {item.total_dead}
-            </Text>
-          </View>
-        ),
-      },
-      {
-        key: 'demo',
-        label: 'Demo',
-        width: 100,
-        render: (item) => (
-          <View style={styles.tableStatContainer}>
-            <MaterialIcons name="play-circle-outline" size={16} color="#2196F3" />
-            <Text style={[styles.tableStatValue, { color: '#2196F3' }]}>
-              {item.total_demo}
             </Text>
           </View>
         ),
@@ -409,13 +395,31 @@ export default function EmployeeSurveyOutcomesScreen() {
         {/* Summary Cards */}
         <View style={styles.desktopSummary}>
           <View style={styles.summaryCardDesktop}>
-            <Text style={styles.summaryCardLabel}>Total Qualified</Text>
-            <Text style={[styles.summaryCardValue, { color: '#4CAF50' }]}>
-              {totalStats.qualified_count}
+            <Text style={styles.summaryCardLabel}>BCI</Text>
+            <Text style={[styles.summaryCardValue, { color: '#9E9E9E' }]}>
+              {totalStats.total_bad_contact}
             </Text>
           </View>
           <View style={styles.summaryCardDesktop}>
-            <Text style={styles.summaryCardLabel}>Total Installs</Text>
+            <Text style={styles.summaryCardLabel}>Dead</Text>
+            <Text style={[styles.summaryCardValue, { color: '#F44336' }]}>
+              {totalStats.total_dead}
+            </Text>
+          </View>
+          <View style={styles.summaryCardDesktop}>
+            <Text style={styles.summaryCardLabel}>Still Contacting</Text>
+            <Text style={[styles.summaryCardValue, { color: '#FF9800' }]}>
+              {totalStats.total_still_contacting}
+            </Text>
+          </View>
+          <View style={styles.summaryCardDesktop}>
+            <Text style={styles.summaryCardLabel}>Demo</Text>
+            <Text style={[styles.summaryCardValue, { color: '#2196F3' }]}>
+              {totalStats.total_demo}
+            </Text>
+          </View>
+          <View style={styles.summaryCardDesktop}>
+            <Text style={styles.summaryCardLabel}>Install</Text>
             <Text style={[styles.summaryCardValue, { color: '#4CAF50' }]}>
               {totalStats.total_install}
             </Text>
@@ -471,7 +475,7 @@ export default function EmployeeSurveyOutcomesScreen() {
             <View style={styles.infoBannerContent}>
               <Text style={styles.infoBannerTitle}>Salesforce Outcome Tracking</Text>
               <Text style={styles.infoBannerText}>
-                View how employee surveys performed based on Salesforce Lead/Appointment statuses. Stats sync daily from Salesforce.
+                View how employee surveys performed based on Salesforce Lead/Appointment statuses. Stats sync daily at midnight.
               </Text>
             </View>
           </View>
@@ -566,14 +570,29 @@ export default function EmployeeSurveyOutcomesScreen() {
             <Text style={styles.summaryTitle}>Team Totals</Text>
             <View style={styles.summaryGrid}>
               <View style={styles.summaryCard}>
-                <MaterialIcons name="assignment-turned-in" size={32} color="#4CAF50" />
-                <Text style={styles.summaryValue}>{totalStats.qualified_count}</Text>
-                <Text style={styles.summaryLabel}>Qualified</Text>
+                <MaterialIcons name="phone-disabled" size={32} color="#9E9E9E" />
+                <Text style={styles.summaryValue}>{totalStats.total_bad_contact}</Text>
+                <Text style={styles.summaryLabel}>BCI</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <MaterialIcons name="cancel" size={32} color="#F44336" />
+                <Text style={styles.summaryValue}>{totalStats.total_dead}</Text>
+                <Text style={styles.summaryLabel}>Dead</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <MaterialIcons name="pending" size={32} color="#FF9800" />
+                <Text style={styles.summaryValue}>{totalStats.total_still_contacting}</Text>
+                <Text style={styles.summaryLabel}>Still Contacting</Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <MaterialIcons name="play-circle-outline" size={32} color="#2196F3" />
+                <Text style={styles.summaryValue}>{totalStats.total_demo}</Text>
+                <Text style={styles.summaryLabel}>Demo</Text>
               </View>
               <View style={styles.summaryCard}>
                 <MaterialIcons name="check-circle" size={32} color="#4CAF50" />
                 <Text style={styles.summaryValue}>{totalStats.total_install}</Text>
-                <Text style={styles.summaryLabel}>Installs</Text>
+                <Text style={styles.summaryLabel}>Install</Text>
               </View>
               <View style={styles.summaryCard}>
                 <MaterialIcons name="assessment" size={32} color="#2196F3" />
@@ -593,20 +612,6 @@ export default function EmployeeSurveyOutcomesScreen() {
             <Text style={styles.sortLabel}>Sort by:</Text>
             <View style={styles.sortButtons}>
               <Pressable
-                onPress={() => handleSort('qualified')}
-                style={[
-                  styles.sortButton,
-                  sortBy === 'qualified' && styles.sortButtonActive,
-                ]}
-              >
-                <Text style={[
-                  styles.sortButtonText,
-                  sortBy === 'qualified' && styles.sortButtonTextActive,
-                ]}>
-                  Qualified {sortBy === 'qualified' && (sortOrder === 'desc' ? '↓' : '↑')}
-                </Text>
-              </Pressable>
-              <Pressable
                 onPress={() => handleSort('install')}
                 style={[
                   styles.sortButton,
@@ -617,7 +622,35 @@ export default function EmployeeSurveyOutcomesScreen() {
                   styles.sortButtonText,
                   sortBy === 'install' && styles.sortButtonTextActive,
                 ]}>
-                  Installs {sortBy === 'install' && (sortOrder === 'desc' ? '↓' : '↑')}
+                  Install {sortBy === 'install' && (sortOrder === 'desc' ? '↓' : '↑')}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleSort('demo')}
+                style={[
+                  styles.sortButton,
+                  sortBy === 'demo' && styles.sortButtonActive,
+                ]}
+              >
+                <Text style={[
+                  styles.sortButtonText,
+                  sortBy === 'demo' && styles.sortButtonTextActive,
+                ]}>
+                  Demo {sortBy === 'demo' && (sortOrder === 'desc' ? '↓' : '↑')}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleSort('dead')}
+                style={[
+                  styles.sortButton,
+                  sortBy === 'dead' && styles.sortButtonActive,
+                ]}
+              >
+                <Text style={[
+                  styles.sortButtonText,
+                  sortBy === 'dead' && styles.sortButtonTextActive,
+                ]}>
+                  Dead {sortBy === 'dead' && (sortOrder === 'desc' ? '↓' : '↑')}
                 </Text>
               </Pressable>
               <Pressable
@@ -650,7 +683,7 @@ export default function EmployeeSurveyOutcomesScreen() {
                       <Text style={styles.employeeName}>{emp.employee_name}</Text>
                       <View style={styles.employeeMetrics}>
                         <Text style={styles.metricText}>
-                          {emp.qualified_count} Qualified
+                          {emp.total_surveys} surveys
                         </Text>
                         <Text style={styles.metricDivider}>•</Text>
                         <Text style={[
