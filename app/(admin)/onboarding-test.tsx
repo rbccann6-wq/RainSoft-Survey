@@ -659,6 +659,14 @@ export default function OnboardingTestScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Demo Mode Banner */}
+      <View style={styles.demoBanner}>
+        <MaterialIcons name="info" size={20} color="#FFFFFF" />
+        <Text style={styles.demoBannerText}>
+          DEMO MODE: This is a walkthrough of the onboarding process. No data will be saved to the database.
+        </Text>
+      </View>
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
@@ -1027,5 +1035,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: LOWES_THEME.border,
     backgroundColor: LOWES_THEME.surface,
+  },
+  demoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#2196F3',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  demoBannerText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    lineHeight: 18,
   },
 });
