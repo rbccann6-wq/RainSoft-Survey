@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAlert } from '@/template';
 import SignatureScreen from 'react-native-signature-canvas';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SPACING, FONTS, LOWES_THEME } from '@/constants/theme';
@@ -185,16 +186,91 @@ export default function OnboardingTestScreen() {
   const renderStep1 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>Step 1: Basic Information</Text>
-      <Text style={styles.stepSubtitle}>Employee: John Surveyor (surveyor@rainsoft.com)</Text>
+      <Text style={styles.stepSubtitle}>Please provide your personal details</Text>
 
       <View style={styles.formSection}>
         <Text style={styles.formSectionTitle}>Home Address</Text>
-        <Input
-          value={address}
-          onChangeText={setAddress}
-          placeholder="123 Main Street"
-          label="Street Address"
-        />
+        <Text style={styles.fieldLabel}>Street Address</Text>
+        
+        {/* Google Places Autocomplete */}
+        <View style={styles.googlePlacesContainer}>
+          <GooglePlacesAutocomplete
+            placeholder="Start typing your address..."
+            onPress={(data, details = null) => {
+              setAddress(data.description);
+              
+              // Extract city, state, zip if available
+              if (details?.address_components) {
+                const components = details.address_components;
+                const cityComponent = components.find(c => c.types.includes('locality'));
+                const stateComponent = components.find(c => c.types.includes('administrative_area_level_1'));
+                const zipComponent = components.find(c => c.types.includes('postal_code'));
+                
+                if (cityComponent) setCity(cityComponent.long_name);
+                if (stateComponent) setState(stateComponent.short_name);
+                if (zipComponent) setZipCode(zipComponent.long_name);
+              }
+            }}
+            query={{
+              key: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '',
+              language: 'en',
+              components: 'country:us',
+            }}
+            fetchDetails={true}
+            enablePoweredByContainer={false}
+            styles={{
+              container: {
+                flex: 0,
+              },
+              textInputContainer: {
+                backgroundColor: LOWES_THEME.surface,
+                borderWidth: 1,
+                borderColor: LOWES_THEME.border,
+                borderRadius: 8,
+                paddingHorizontal: 0,
+              },
+              textInput: {
+                height: 48,
+                fontSize: FONTS.sizes.md,
+                color: LOWES_THEME.text,
+                backgroundColor: LOWES_THEME.surface,
+              },
+              predefinedPlacesDescription: {
+                color: LOWES_THEME.primary,
+              },
+              listView: {
+                position: 'absolute',
+                top: 50,
+                left: 0,
+                right: 0,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 8,
+                elevation: 5,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+                zIndex: 1000,
+                maxHeight: 200,
+              },
+              row: {
+                padding: SPACING.md,
+                borderBottomWidth: 1,
+                borderBottomColor: LOWES_THEME.border,
+              },
+              description: {
+                fontSize: FONTS.sizes.md,
+                color: LOWES_THEME.text,
+              },
+            }}
+            textInputProps={{
+              value: address,
+              onChangeText: setAddress,
+              placeholderTextColor: '#999',
+            }}
+          />
+        </View>
+        
         <View style={styles.formRow}>
           <View style={styles.formFieldLarge}>
             <Input
@@ -856,7 +932,12 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
     color: LOWES_THEME.text,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  googlePlacesContainer: {
+    minHeight: 50,
+    marginBottom: SPACING.md,
+    zIndex: 1000,
   },
   radioGroup: {
     gap: SPACING.sm,
