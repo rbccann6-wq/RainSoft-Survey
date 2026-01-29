@@ -24,36 +24,34 @@ interface MenuItem {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { currentUser, employees, surveys, isOnline, logout } = useApp();
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const { currentUser, employees, surveys, isOnline, logout, getClockedInEmployees } = useApp();
+  const [clockedInData, setClockedInData] = useState<Array<{
+    employee: any;
+    timeEntry: TimeEntry;
+    todayStats: { surveys: number; appointments: number };
+  }>>([]);
 
   useEffect(() => {
-    loadTimeEntries();
-    const interval = setInterval(loadTimeEntries, 30000); // Refresh every 30 seconds
+    loadClockedInEmployees();
+    const interval = setInterval(loadClockedInEmployees, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
-  const loadTimeEntries = async () => {
-    const entries = await StorageService.getTimeEntries();
-    setTimeEntries(entries || []);
+  const loadClockedInEmployees = async () => {
+    const data = await getClockedInEmployees();
+    setClockedInData(data || []);
   };
 
   // Calculate metrics
   const activeEmployees = employees.filter(e => e.status === 'active');
-  const clockedInEmployees = activeEmployees.filter(emp => 
-    timeEntries.some(te => te.employeeId === emp.id && !te.clockOut)
-  );
+  const clockedInEmployees = clockedInData.map(d => d.employee);
   
   // Check for inactive employees using same logic as activity monitor
   const now = Date.now();
   const inactiveThreshold = 15 * 60 * 1000; // 15 minutes
   
   // Enhanced status detection using BOTH heartbeat and survey activity
-  const employeeStatus = clockedInEmployees.map(emp => {
-    const latestEntry = timeEntries
-      .filter(te => te.employeeId === emp.id && !te.clockOut)
-      .sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime())[0];
-    
+  const employeeStatus = clockedInData.map(({ employee: emp, timeEntry: latestEntry }) => {
     // Get last activity from surveys
     const today = new Date().toISOString().split('T')[0];
     const employeeSurveysToday = surveys.filter(s => 
@@ -90,6 +88,7 @@ export default function AdminDashboard() {
       inactiveDuration,
       lastActivity: new Date(lastActivityTime).toISOString(),
       store: latestEntry?.store,
+      timeEntry: latestEntry,
     };
   });
 
@@ -342,8 +341,7 @@ export default function AdminDashboard() {
                           styles.storeText,
                           { color: emp.store === 'lowes' ? '#004990' : '#FF6200' },
                         ]}>
-                          {timeEntries.find(te => te.employeeId === emp.id && !te.clockOut)?.storeName || 
-                           (emp.store === 'lowes' ? 'Lowes' : 'Home Depot')}
+                          {emp.timeEntry?.storeName || (emp.store === 'lowes' ? 'Lowes' : 'Home Depot')}
                         </Text>
                       </View>
                       
