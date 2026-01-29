@@ -40,7 +40,6 @@ export default function SurveyScreen() {
   const lastQuestionChangeRef = useRef<Date>(new Date());
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [numberValue, setNumberValue] = useState('');
-  const [multiSelectAnswers, setMultiSelectAnswers] = useState<string[]>([]);
 
   // Get active time entry ID
   React.useEffect(() => {
@@ -232,7 +231,13 @@ export default function SurveyScreen() {
       });
     }
     
-    const newAnswers = { ...answers, [currentQuestion.id]: answer };
+    // Transform tastes_odors answer: Yes → "tastes;odors", No → "None"
+    let transformedAnswer = answer;
+    if (currentQuestion.id === 'tastes_odors') {
+      transformedAnswer = answer === 'Yes' ? 'tastes;odors' : 'None';
+    }
+    
+    const newAnswers = { ...answers, [currentQuestion.id]: transformedAnswer };
     setAnswers(newAnswers);
 
     // Check if survey should end early
@@ -383,7 +388,6 @@ export default function SurveyScreen() {
           setState('');
           setZipLookupError('');
           setNumberValue('');
-          setMultiSelectAnswers([]);
         },
       },
     ]);
@@ -487,7 +491,6 @@ export default function SurveyScreen() {
             setState('');
             setZipLookupError('');
             setNumberValue('');
-            setMultiSelectAnswers([]);
           } catch (err) {
             console.error('❌ Survey submission error:', err);
             showAlert('Error', 'Failed to save survey. Please try again.');
@@ -552,7 +555,6 @@ export default function SurveyScreen() {
               setState('');
               setZipLookupError('');
               setNumberValue('');
-              setMultiSelectAnswers([]);
             },
           },
         ]
@@ -580,7 +582,6 @@ export default function SurveyScreen() {
               setState('');
               setZipLookupError('');
               setNumberValue('');
-              setMultiSelectAnswers([]);
             },
           },
         ]
@@ -608,66 +609,6 @@ export default function SurveyScreen() {
               backgroundColor={theme.error}
               size="large"
               fullWidth
-            />
-          </View>
-        );
-
-      case 'multiselect':
-        const currentMultiSelect = (answer as string[]) || [];
-        const toggleMultiSelect = (option: string) => {
-          let newSelection: string[];
-          
-          // Special handling for "None" option
-          if (option === 'None') {
-            // If None is selected, clear all others
-            newSelection = currentMultiSelect.includes('None') ? [] : ['None'];
-          } else {
-            // Remove "None" if user selects any other option
-            const withoutNone = currentMultiSelect.filter(o => o !== 'None');
-            
-            if (withoutNone.includes(option)) {
-              // Deselect this option
-              newSelection = withoutNone.filter(o => o !== option);
-            } else {
-              // Add this option
-              newSelection = [...withoutNone, option];
-            }
-          }
-          
-          // Update both the answer in the answers object
-          setAnswers({ ...answers, [currentQuestion.id]: newSelection });
-        };
-        
-        return (
-          <View style={styles.optionsContainer}>
-            {currentQuestion.options?.map((option) => {
-              const isSelected = currentMultiSelect.includes(option);
-              return (
-                <Button
-                  key={option}
-                  title={option}
-                  onPress={() => toggleMultiSelect(option)}
-                  variant={isSelected ? 'primary' : 'outline'}
-                  backgroundColor={isSelected ? theme.primary : 'transparent'}
-                  textColor={isSelected ? '#FFFFFF' : theme.primary}
-                  size="large"
-                  fullWidth
-                />
-              );
-            })}
-            <Button
-              title="Continue"
-              onPress={() => {
-                if (currentMultiSelect.length === 0) {
-                  showAlert('Selection Required', 'Please select at least one option or "None"');
-                  return;
-                }
-                handleAnswer(currentMultiSelect);
-              }}
-              backgroundColor={theme.success}
-              size="large"
-              fullWidth
-              disabled={currentMultiSelect.length === 0}
             />
           </View>
         );

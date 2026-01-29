@@ -59,9 +59,8 @@ export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   },
   {
     id: 'tastes_odors',
-    question: 'Do you experience any of the following with your tap water? (Select all that apply)',
-    type: 'multiselect',
-    options: ['Tastes', 'Odors', 'None'],
+    question: 'Do you experience any tastes or odors with your tap water?',
+    type: 'yesno',
     required: true,
   },
   {

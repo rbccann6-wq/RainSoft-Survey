@@ -133,10 +133,8 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
   const recordTypeId = isLowes ? '012Rl000007imrJIAQ' : '01236000001QBdgAAG';
   const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
   
-  // Map tastes/odors answer to multipicklist format (array of strings)
-  const tastesOdorsArray = Array.isArray(answers.tastes_odors) ? answers.tastes_odors : [];
-  // Filter out "None" and join remaining values with semicolons for Salesforce multipicklist
-  const tastesOdorsValue = tastesOdorsArray.filter(v => v !== 'None').join(';') || 'None';
+  // Map tastes/odors answer (already formatted as "tastes;odors" or "None")
+  const tastesOdorsValue = answers.tastes_odors || 'None';
   
   // Map filters answer to backend format
   const filtersValue = answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
@@ -202,11 +200,7 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
       // Map survey answer fields
       let value = getNestedValue(answers, surveyField);
       
-      // Special handling for tastes_odors field (multipicklist)
-      if (surveyField === 'tastes_odors') {
-        const tastesOdorsArray = Array.isArray(value) ? value : [];
-        value = tastesOdorsArray.filter((v: string) => v !== 'None').join(';') || 'None';
-      }
+      // No special handling needed for tastes_odors - already formatted as "tastes;odors" or "None"
       
       // Special handling for uses_filters field
       if (surveyField === 'uses_filters') {
@@ -400,9 +394,9 @@ export const sendToZapier = async (data: {
     const leadSource = isLowes ? 'Lowes' : 'HDS';
     const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
     
-    // Format tastes/odors for Zapier (multipicklist as comma-separated string)
-    const tastesOdorsArray = Array.isArray(data.survey.answers.tastes_odors) ? data.survey.answers.tastes_odors : [];
-    const tastesOdorsForZapier = tastesOdorsArray.length > 0 ? tastesOdorsArray.join(', ') : 'None';
+    // Format tastes/odors for Zapier (convert semicolon to readable format)
+    const tastesOdorsRaw = data.survey.answers.tastes_odors || 'None';
+    const tastesOdorsForZapier = tastesOdorsRaw === 'tastes;odors' ? 'Tastes, Odors' : 'None';
     
     // Format filters for Zapier
     const filtersForZapier = data.survey.answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
