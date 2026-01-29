@@ -56,6 +56,7 @@ export default function OnboardingTestScreen() {
   const [accountNumber, setAccountNumber] = useState('');
   
   // Step 6: Acknowledgments
+  const [ackReadPacket, setAckReadPacket] = useState(false);
   const [ackFalsified, setAckFalsified] = useState(false);
   const [ackIpad, setAckIpad] = useState(false);
   const [ackQuota, setAckQuota] = useState(false);
@@ -87,7 +88,7 @@ export default function OnboardingTestScreen() {
   };
 
   const canProgressFromStep6 = () => {
-    return ackFalsified && ackIpad && ackQuota;
+    return ackReadPacket && ackFalsified && ackIpad && ackQuota;
   };
 
   const handleNextStep = async () => {
@@ -809,12 +810,10 @@ export default function OnboardingTestScreen() {
         </Text>
         <Pressable
           style={styles.checkboxRow}
-          onPress={() => {
-            // This will be handled by the critical acknowledgments below
-          }}
+          onPress={() => setAckReadPacket(!ackReadPacket)}
         >
-          <View style={[styles.checkbox, (ackFalsified && ackIpad && ackQuota) && styles.checkboxChecked]}>
-            {(ackFalsified && ackIpad && ackQuota) && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
+          <View style={[styles.checkbox, ackReadPacket && styles.checkboxChecked]}>
+            {ackReadPacket && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
           </View>
           <Text style={styles.checkboxLabel}>I acknowledge that I have read this packet</Text>
         </Pressable>
