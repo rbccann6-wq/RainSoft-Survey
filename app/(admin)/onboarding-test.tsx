@@ -18,6 +18,7 @@ export default function OnboardingTestScreen() {
   const signatureRef = useRef<any>();
   
   const [currentStep, setCurrentStep] = useState(1);
+  const [testEmployeeId, setTestEmployeeId] = useState<string | null>(null);
   const [compensationSettings, setCompensationSettings] = useState({
     baseHourlyRate: 15,
     surveyInstallBonus: 10,
@@ -64,11 +65,29 @@ export default function OnboardingTestScreen() {
 
   React.useEffect(() => {
     loadCompensation();
+    loadTestEmployee();
   }, []);
 
   const loadCompensation = async () => {
     const settings = await StorageService.getCompensationSettings();
     setCompensationSettings(settings);
+  };
+
+  const loadTestEmployee = async () => {
+    try {
+      const employees = await StorageService.getEmployees();
+      const testEmployee = employees.find(e => e.email === 'surveyor@rainsoft.com');
+      
+      if (testEmployee) {
+        setTestEmployeeId(testEmployee.id);
+        console.log('✅ Test employee found:', testEmployee.id);
+      } else {
+        console.warn('⚠️ Test employee not found - onboarding save will fail');
+        showAlert('Test Employee Not Found', 'The surveyor@rainsoft.com account does not exist. Onboarding data cannot be saved.');
+      }
+    } catch (error) {
+      console.error('Error loading test employee:', error);
+    }
   };
 
   const canProgressFromStep1 = () => {
@@ -122,10 +141,15 @@ export default function OnboardingTestScreen() {
       
       // Save all onboarding data to database
       try {
-        console.log('💾 Saving onboarding data for surveyor@rainsoft.com...');
+        if (!testEmployeeId) {
+          showAlert('Cannot Save', 'Test employee ID not loaded. Please restart the app.');
+          return;
+        }
+        
+        console.log('💾 Saving onboarding data for employee:', testEmployeeId);
         
         const onboardingData = {
-          employeeId: 'surveyor@rainsoft.com', // This would be the actual employee ID
+          employeeId: testEmployeeId,
           step: 6,
           personalInfo: {
             address,
