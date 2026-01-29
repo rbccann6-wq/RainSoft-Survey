@@ -1,6 +1,6 @@
 // Onboarding Test Screen - Walk through onboarding step by step for surveyor@rainsoft.com
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -120,6 +120,13 @@ export default function OnboardingTestScreen() {
         },
       ]);
       return;
+    }
+    
+    // Auto-save signature before moving to next step
+    if (currentStep === 3 || currentStep === 4 || currentStep === 6) {
+      signatureRef.current?.readSignature();
+      // Small delay to ensure signature is captured
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
     
     setCurrentStep(currentStep + 1);
@@ -319,8 +326,7 @@ export default function OnboardingTestScreen() {
             • Training: Up to 25 hours at $15/hr{'\n'}
             • Quota: Maintain {compensationSettings.quota} qualified surveys per hour{'\n'}
             • Raises: $0.50/hour every 30 days (up to $18/hr){'\n'}
-            • $100 bonus after 30-day evaluation{'\n'}
-            • 1099 contractor (responsible for own taxes)
+            • $100 bonus after 30-day evaluation
           </Text>
         </View>
       </View>
@@ -682,14 +688,20 @@ export default function OnboardingTestScreen() {
       {renderStepIndicator()}
 
       {/* Step Content */}
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {currentStep === 1 && renderStep1()}
-        {currentStep === 2 && renderStep2()}
-        {currentStep === 3 && renderStep3()}
-        {currentStep === 4 && renderStep4()}
-        {currentStep === 5 && renderStep5()}
-        {currentStep === 6 && renderStep6()}
-      </ScrollView>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={100}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && renderStep4()}
+          {currentStep === 5 && renderStep5()}
+          {currentStep === 6 && renderStep6()}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Navigation Buttons */}
       <View style={styles.navigation}>
