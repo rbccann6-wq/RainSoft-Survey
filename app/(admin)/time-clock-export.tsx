@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { SPACING, FONTS, LOWES_THEME } from '@/constants/theme';
 import { TimeEntry } from '@/types';
 import * as StorageService from '@/services/storageService';
+import * as ActivityService from '@/services/activityService';
 import { exportTimeEntriesToCSV, downloadCSV, shareCSV } from '@/utils/exportData';
 import { Platform } from 'react-native';
 import { formatFullDateTime } from '@/utils/timeFormat';
@@ -16,18 +17,23 @@ import { formatFullDateTime } from '@/utils/timeFormat';
 export default function TimeClockExportScreen() {
   const { employees } = useApp();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [inactivityLogs, setInactivityLogs] = useState<any[]>([]);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState<'start' | 'end' | null>(null);
 
   useEffect(() => {
-    loadTimeEntries();
+    loadData();
   }, []);
 
-  const loadTimeEntries = async () => {
-    const entries = await StorageService.getTimeEntries();
+  const loadData = async () => {
+    const [entries, logs] = await Promise.all([
+      StorageService.getTimeEntries(),
+      ActivityService.getAllInactivityLogs(),
+    ]);
     setTimeEntries(entries || []);
+    setInactivityLogs(logs || []);
   };
 
   // Filter time entries
@@ -51,9 +57,10 @@ export default function TimeClockExportScreen() {
     });
   }, [timeEntries, startDate, endDate, selectedEmployee]);
 
-  // Calculate stats
+  // Calculate stats including inactivity
   const stats = useMemo(() => {
     let totalHours = 0;
+    let totalInactivityMinutes = 0;
     let completedShifts = 0;
     let activeShifts = 0;
 
@@ -67,6 +74,14 @@ export default function TimeClockExportScreen() {
       } else {
         activeShifts++;
       }
+
+      // Calculate inactivity for this time entry
+      const entryInactivity = inactivityLogs.filter(log => 
+        log.time_entry_id === entry.id
+      );
+      entryInactivity.forEach(log => {
+        totalInactivityMinutes += log.inactive_duration_minutes || 0;
+      });
     });
 
     return {
@@ -74,8 +89,9 @@ export default function TimeClockExportScreen() {
       completedShifts,
       activeShifts,
       totalHours: totalHours.toFixed(1),
+      totalInactivity: (totalInactivityMinutes / 60).toFixed(1),
     };
-  }, [filteredEntries]);
+  }, [filteredEntries, inactivityLogs]);
 
   const handleExport = () => {
     const csv = exportTimeEntriesToCSV(filteredEntries, employees);
@@ -201,6 +217,11 @@ export default function TimeClockExportScreen() {
             <Text style={styles.statValue}>{stats.totalHours}</Text>
             <Text style={styles.statLabel}>Total Hours</Text>
           </View>
+          
+          <View style={[styles.statCard, { borderLeftColor: '#F44336' }]}>
+            <Text style={styles.statValue}>{stats.totalInactivity}</Text>
+            <Text style={styles.statLabel}>Inactivity (hrs)</Text>
+          </View>
         </View>
 
         {/* Time Entries List */}
@@ -223,6 +244,14 @@ export default function TimeClockExportScreen() {
                 const hours = clockOut
                   ? ((clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60)).toFixed(2)
                   : 'Active';
+
+                // Get inactivity logs for this time entry
+                const entryInactivityLogs = inactivityLogs.filter(log => 
+                  log.time_entry_id === entry.id
+                );
+                const totalInactivityMinutes = entryInactivityLogs.reduce((sum, log) => 
+                  sum + (log.inactive_duration_minutes || 0), 0
+                );
 
                 return (
                   <View key={entry.id} style={styles.entryCard}>
@@ -280,6 +309,41 @@ export default function TimeClockExportScreen() {
                         </View>
                       )}
                     </View>
+
+                    {/* Inactivity Section */}
+                    {totalInactivityMinutes > 0 && (
+                      <View style={styles.inactivitySection}>
+                        <View style={styles.inactivityHeader}>
+                          <MaterialIcons name="pause-circle-outline" size={20} color="#F44336" />
+                          <Text style={styles.inactivityTitle}>
+                            Inactive Periods ({(totalInactivityMinutes / 60).toFixed(1)} hrs total)
+                          </Text>
+                        </View>
+                        <View style={styles.inactivityList}>
+                          {entryInactivityLogs.map((log, index) => {
+                            const detectedDate = new Date(log.detected_at);
+                            const lastActivity = new Date(log.last_activity_at);
+                            const endTime = new Date(lastActivity.getTime() + log.inactive_duration_minutes * 60 * 1000);
+                            
+                            return (
+                              <View key={log.id || index} style={styles.inactivityItem}>
+                                <Text style={styles.inactivityDate}>
+                                  {detectedDate.toLocaleDateString()}
+                                </Text>
+                                <Text style={styles.inactivityTime}>
+                                  {lastActivity.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {' - '}
+                                  {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                                <Text style={styles.inactivityDuration}>
+                                  {log.inactive_duration_minutes} min
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -484,5 +548,49 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: FONTS.sizes.md,
     color: LOWES_THEME.textSubtle,
+  },
+  inactivitySection: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: LOWES_THEME.border,
+    gap: SPACING.sm,
+  },
+  inactivityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  inactivityTitle: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    color: '#F44336',
+  },
+  inactivityList: {
+    gap: SPACING.xs,
+  },
+  inactivityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 6,
+  },
+  inactivityDate: {
+    fontSize: FONTS.sizes.xs,
+    color: LOWES_THEME.textSubtle,
+    width: 80,
+  },
+  inactivityTime: {
+    fontSize: FONTS.sizes.xs,
+    color: LOWES_THEME.text,
+    flex: 1,
+  },
+  inactivityDuration: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '600',
+    color: '#F44336',
   },
 });

@@ -352,6 +352,30 @@ export const getInactivityLogs = async (limit: number = 50): Promise<any[]> => {
   }
 };
 
+// Get ALL inactivity logs for time clock export (no limit)
+export const getAllInactivityLogs = async (): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('inactivity_log')
+      .select(`
+        *,
+        employees!inactivity_log_employee_id_fkey(first_name, last_name),
+        admins:employees!inactivity_log_admin_id_fkey(first_name, last_name)
+      `)
+      .order('detected_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all inactivity logs:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error getting all inactivity logs:', error);
+    return [];
+  }
+};
+
 // AUTOMATIC INACTIVITY ALERTS: Check all clocked-in employees and send alerts
 let alertInterval: NodeJS.Timeout | null = null;
 const notifiedEmployees = new Map<string, { push: boolean; sms: boolean }>();

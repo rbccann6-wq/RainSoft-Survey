@@ -34,8 +34,36 @@ export default function ActivityMonitorScreen() {
         ActivityService.getInactivityLogs(20),
       ]);
       
+      // Auto-log any inactivity >10 minutes
+      for (const user of inactive) {
+        if (user.inactiveDurationMinutes >= 10) {
+          // Check if this inactivity was already logged in the last 15 minutes
+          const recentlyLogged = logs.some(log => 
+            log.employee_id === user.employeeId && 
+            new Date().getTime() - new Date(log.detected_at).getTime() < 15 * 60 * 1000
+          );
+          
+          if (!recentlyLogged) {
+            // Auto-log this inactivity
+            await ActivityService.logInactivity(
+              user.employeeId,
+              user.timeEntryId,
+              user.lastActivityAt,
+              user.inactiveDurationMinutes,
+              user.currentPage,
+              'auto_logged',
+              currentUser!.id,
+              `Auto-logged: inactive for ${user.inactiveDurationMinutes} minutes`
+            );
+          }
+        }
+      }
+      
+      // Reload logs to show newly auto-logged entries
+      const updatedLogs = await ActivityService.getInactivityLogs(20);
+      
       setInactiveUsers(inactive);
-      setInactivityLogs(logs);
+      setInactivityLogs(updatedLogs);
     } catch (error) {
       console.error('Error loading activity data:', error);
       showAlert('Error', 'Failed to load activity monitor data');
@@ -78,14 +106,14 @@ export default function ActivityMonitorScreen() {
     );
   };
 
-  const handleLogInactivity = (user: ActivityService.InactiveUser) => {
+  const handleSendNotification = (user: ActivityService.InactiveUser) => {
     showAlert(
-      'Log Inactivity',
-      `Log inactivity for ${user.employeeName}?`,
+      'Send Notification',
+      `Send notification to ${user.employeeName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Log',
+          text: 'Send',
           onPress: async () => {
             await ActivityService.logInactivity(
               user.employeeId,
@@ -95,9 +123,9 @@ export default function ActivityMonitorScreen() {
               user.currentPage,
               'notified',
               currentUser!.id,
-              'Admin notified employee via other channels'
+              'Admin manually sent notification to employee'
             );
-            showAlert('Success', 'Inactivity logged');
+            showAlert('Success', 'Notification sent and logged');
             loadData();
           },
         },
@@ -157,9 +185,20 @@ export default function ActivityMonitorScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+        {/* Info Banner */}
+        <View style={styles.infoBanner}>
+          <MaterialIcons name="info" size={24} color={LOWES_THEME.primary} />
+          <View style={styles.infoBannerContent}>
+            <Text style={styles.infoBannerTitle}>Auto-Logging Enabled</Text>
+            <Text style={styles.infoBannerText}>
+              Inactivity periods ≥10 minutes are automatically logged every 30 seconds. Use "Send Alert" to manually notify employees.
+            </Text>
+          </View>
+        </View>
+
         {/* Threshold Selector */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Inactivity Threshold</Text>
+          <Text style={styles.sectionTitle}>Display Threshold</Text>
           <View style={styles.thresholdButtons}>
             {[3, 5, 10, 15].map((minutes) => (
               <Pressable
@@ -250,10 +289,10 @@ export default function ActivityMonitorScreen() {
 
                     <View style={styles.userActions}>
                       <Button
-                        title="Log"
-                        onPress={() => handleLogInactivity(user)}
+                        title="Send Alert"
+                        onPress={() => handleSendNotification(user)}
                         variant="outline"
-                        icon="event-note"
+                        icon="notifications"
                       />
                       <Button
                         title="Force Clock Out"
@@ -302,6 +341,8 @@ export default function ActivityMonitorScreen() {
                             ? '#FFE5E5'
                             : log.action_taken === 'notified'
                             ? '#FFF4E5'
+                            : log.action_taken === 'auto_logged'
+                            ? '#E3F2FD'
                             : '#E8F5E9',
                       },
                     ]}>
@@ -314,11 +355,13 @@ export default function ActivityMonitorScreen() {
                                 ? LOWES_THEME.error
                                 : log.action_taken === 'notified'
                                 ? '#FF9800'
+                                : log.action_taken === 'auto_logged'
+                                ? '#2196F3'
                                 : LOWES_THEME.success,
                           },
                         ]}
                       >
-                        {log.action_taken?.replace('_', ' ').toUpperCase()}
+                        {log.action_taken === 'auto_logged' ? 'AUTO-LOGGED' : log.action_taken?.replace('_', ' ').toUpperCase()}
                       </Text>
                     </View>
                   </View>
@@ -561,5 +604,29 @@ const styles = StyleSheet.create({
   unauthorizedText: {
     fontSize: FONTS.sizes.lg,
     color: '#999',
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    padding: SPACING.md,
+    marginHorizontal: SPACING.lg,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: LOWES_THEME.primary,
+  },
+  infoBannerContent: {
+    flex: 1,
+    gap: SPACING.xs,
+  },
+  infoBannerTitle: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '700',
+    color: LOWES_THEME.text,
+  },
+  infoBannerText: {
+    fontSize: FONTS.sizes.sm,
+    color: LOWES_THEME.text,
+    lineHeight: 20,
   },
 });
