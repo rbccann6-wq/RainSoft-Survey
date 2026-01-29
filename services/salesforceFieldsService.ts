@@ -1,5 +1,4 @@
-// Salesforce Field Metadata Service - Fetches real fields from Salesforce API
-import { authenticateSalesforce, SALESFORCE_CONFIG } from './syncService';
+// Salesforce Field Metadata Service - Fetches real fields from Salesforce API via Edge Function
 
 export interface SalesforceField {
   name: string;
@@ -17,7 +16,7 @@ let cacheTimestamp: number = 0;
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Fetch all Lead object fields from Salesforce API
+ * Fetch all Lead object fields from Salesforce API via Edge Function
  */
 export const fetchSalesforceLeadFields = async (): Promise<{
   success: boolean;
@@ -31,49 +30,35 @@ export const fetchSalesforceLeadFields = async (): Promise<{
       return { success: true, fields: cachedLeadFields };
     }
 
-    console.log('🔄 Fetching Lead fields from Salesforce...');
+    console.log('🔄 Fetching Lead fields from Salesforce via Edge Function...');
     
-    // Authenticate with Salesforce
-    const accessToken = await authenticateSalesforce();
+    // Call Edge Function to fetch fields
+    const { getSupabaseClient } = require('@/template');
+    const supabase = getSupabaseClient();
+    const { FunctionsHttpError } = require('@supabase/supabase-js');
     
-    // Describe Lead object to get all fields
-    const describeUrl = `${SALESFORCE_CONFIG.instanceUrl}/services/data/v57.0/sobjects/Lead/describe`;
-    
-    const response = await fetch(describeUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+    const { data, error } = await supabase.functions.invoke('salesforce-sync', {
+      body: { action: 'fetch_lead_fields' },
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Salesforce API error: ${response.status} - ${errorText}`);
-    }
-
-    const metadata = await response.json();
     
-    // Extract and format field information
-    const fields: SalesforceField[] = metadata.fields.map((field: any) => ({
-      name: field.name,
-      label: field.label,
-      type: mapSalesforceType(field.type),
-      custom: field.custom,
-      length: field.length,
-      picklistValues: field.picklistValues?.map((pv: any) => pv.value) || [],
-      referenceTo: field.referenceTo || [],
-      required: !field.nillable && !field.defaultedOnCreate,
-    }));
-
-    // Sort: Standard fields first, then custom fields, alphabetically within each group
-    fields.sort((a, b) => {
-      if (a.custom === b.custom) {
-        return a.label.localeCompare(b.label);
+    if (error) {
+      let errorMessage = error.message || String(error);
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const statusCode = error.context?.status ?? 500;
+          const textContent = await error.context?.text();
+          errorMessage = `[Code: ${statusCode}] ${textContent || error.message || 'Unknown error'}`;
+        } catch {}
       }
-      return a.custom ? 1 : -1;
-    });
-
+      throw new Error(errorMessage);
+    }
+    
+    if (!data.success || !data.fields) {
+      throw new Error('Failed to fetch fields from Salesforce');
+    }
+    
+    const fields: SalesforceField[] = data.fields;
+    
     // Cache the results
     cachedLeadFields = fields;
     cacheTimestamp = Date.now();
@@ -92,32 +77,7 @@ export const fetchSalesforceLeadFields = async (): Promise<{
   }
 };
 
-/**
- * Map Salesforce field types to our simplified types
- */
-function mapSalesforceType(sfType: string): string {
-  const typeMap: Record<string, string> = {
-    'string': 'text',
-    'textarea': 'text',
-    'email': 'text',
-    'phone': 'text',
-    'url': 'text',
-    'picklist': 'picklist',
-    'multipicklist': 'picklist',
-    'boolean': 'boolean',
-    'checkbox': 'boolean',
-    'date': 'date',
-    'datetime': 'datetime',
-    'int': 'number',
-    'double': 'number',
-    'currency': 'number',
-    'percent': 'number',
-    'reference': 'reference',
-    'id': 'text',
-  };
-  
-  return typeMap[sfType.toLowerCase()] || 'text';
-}
+
 
 /**
  * Clear the cache (useful for testing or force refresh)

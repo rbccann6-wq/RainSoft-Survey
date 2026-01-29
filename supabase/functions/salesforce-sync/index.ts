@@ -277,6 +277,74 @@ Deno.serve(async (req) => {
         );
       }
 
+      case 'fetch_lead_fields': {
+        // Describe Lead object to get all fields
+        const describeUrl = `${instanceUrl}/services/data/v57.0/sobjects/Lead/describe`;
+        
+        const response = await fetch(describeUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Salesforce field fetch failed: ${response.status} - ${errorText}`);
+        }
+
+        const metadata = await response.json();
+        
+        // Map Salesforce field types to simplified types
+        const typeMap: Record<string, string> = {
+          'string': 'text',
+          'textarea': 'text',
+          'email': 'text',
+          'phone': 'text',
+          'url': 'text',
+          'picklist': 'picklist',
+          'multipicklist': 'picklist',
+          'boolean': 'boolean',
+          'checkbox': 'boolean',
+          'date': 'date',
+          'datetime': 'datetime',
+          'int': 'number',
+          'double': 'number',
+          'currency': 'number',
+          'percent': 'number',
+          'reference': 'reference',
+          'id': 'text',
+        };
+        
+        // Extract and format field information
+        const fields = metadata.fields.map((field: any) => ({
+          name: field.name,
+          label: field.label,
+          type: typeMap[field.type.toLowerCase()] || 'text',
+          custom: field.custom,
+          length: field.length,
+          picklistValues: field.picklistValues?.map((pv: any) => pv.value) || [],
+          referenceTo: field.referenceTo || [],
+          required: !field.nillable && !field.defaultedOnCreate,
+        }));
+
+        // Sort: Standard fields first, then custom fields, alphabetically within each group
+        fields.sort((a: any, b: any) => {
+          if (a.custom === b.custom) {
+            return a.label.localeCompare(b.label);
+          }
+          return a.custom ? 1 : -1;
+        });
+
+        console.log(`✅ Fetched ${fields.length} Lead fields from Salesforce`);
+        
+        return new Response(
+          JSON.stringify({ success: true, fields }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),
