@@ -316,7 +316,7 @@ export const syncToSalesforce = async (
     console.log('🔄 Starting Salesforce sync for survey:', survey.id);
     
     // Check for duplicates if phone number exists
-    const phone = formatPhoneNumber(survey.answers.contact_info?.phone || ''); // Corrected line
+    const phone = formatPhoneNumber(survey.answers.contact_info?.phone || '');
     if (phone) {
       const duplicateCheck = await checkSalesforceDuplicate(phone);
       if (duplicateCheck.isDuplicate) {
