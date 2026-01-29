@@ -159,6 +159,13 @@ export default function AdminDashboard() {
           description: 'View all surveys',
         },
         {
+          icon: 'bar-chart',
+          label: 'Survey Outcomes',
+          route: '/(admin)/employee-survey-outcomes',
+          color: '#4CAF50',
+          description: 'Employee outcome stats',
+        },
+        {
           icon: 'timeline',
           label: 'Survey Stats',
           route: '/(admin)/survey-stats-config',
