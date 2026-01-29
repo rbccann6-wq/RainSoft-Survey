@@ -17,6 +17,7 @@ interface EmployeeOutcomeStats {
   total_dead: number;
   total_still_contacting: number;
   total_install: number;
+  total_demo: number;
   total_surveys: number;
   qualified_count: number;
   install_rate: number;
@@ -26,7 +27,7 @@ interface EmployeeOutcomeStats {
 const STAT_CATEGORIES = [
   { 
     key: 'bad_contact', 
-    label: 'Bad Contact', 
+    label: 'BCI', 
     color: '#9E9E9E', 
     icon: 'phone-disabled',
   },
@@ -48,6 +49,12 @@ const STAT_CATEGORIES = [
     color: '#4CAF50', 
     icon: 'check-circle',
   },
+  { 
+    key: 'demo', 
+    label: 'Demo', 
+    color: '#2196F3', 
+    icon: 'play-circle-outline',
+  },
 ];
 
 export default function EmployeeSurveyOutcomesScreen() {
@@ -61,6 +68,7 @@ export default function EmployeeSurveyOutcomesScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
   const [sortBy, setSortBy] = useState<'name' | 'qualified' | 'install' | 'install_rate'>('qualified');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
 
   useEffect(() => {
     loadEmployeeStats();
@@ -108,6 +116,7 @@ export default function EmployeeSurveyOutcomesScreen() {
           total_dead: acc.total_dead + curr.dead_count,
           total_still_contacting: acc.total_still_contacting + curr.still_contacting_count,
           total_install: acc.total_install + curr.install_count,
+          total_demo: acc.total_demo + (curr.demo_count || 0),
           total_surveys: acc.total_surveys + curr.total_surveys,
           latest_sync: acc.latest_sync || curr.last_synced_at,
         }), {
@@ -115,6 +124,7 @@ export default function EmployeeSurveyOutcomesScreen() {
           total_dead: 0,
           total_still_contacting: 0,
           total_install: 0,
+          total_demo: 0,
           total_surveys: 0,
           latest_sync: null,
         });
@@ -185,11 +195,16 @@ export default function EmployeeSurveyOutcomesScreen() {
   };
 
   const getTotalStats = () => {
-    return employeeStats.reduce((acc, curr) => ({
+    const statsToAggregate = selectedEmployeeId 
+      ? employeeStats.filter(s => s.employee_id === selectedEmployeeId)
+      : employeeStats;
+    
+    return statsToAggregate.reduce((acc, curr) => ({
       total_bad_contact: acc.total_bad_contact + curr.total_bad_contact,
       total_dead: acc.total_dead + curr.total_dead,
       total_still_contacting: acc.total_still_contacting + curr.total_still_contacting,
       total_install: acc.total_install + curr.total_install,
+      total_demo: acc.total_demo + curr.total_demo,
       total_surveys: acc.total_surveys + curr.total_surveys,
       qualified_count: acc.qualified_count + curr.qualified_count,
     }), {
@@ -197,6 +212,7 @@ export default function EmployeeSurveyOutcomesScreen() {
       total_dead: 0,
       total_still_contacting: 0,
       total_install: 0,
+      total_demo: 0,
       total_surveys: 0,
       qualified_count: 0,
     });
@@ -209,6 +225,11 @@ export default function EmployeeSurveyOutcomesScreen() {
 
   const { width } = Dimensions.get('window');
   const isDesktop = width >= 1024;
+  
+  // Filter stats by selected employee
+  const displayedStats = selectedEmployeeId
+    ? employeeStats.filter(s => s.employee_id === selectedEmployeeId)
+    : employeeStats;
 
   // Desktop view - use data table
   if (isDesktop && !loading) {
@@ -273,9 +294,22 @@ export default function EmployeeSurveyOutcomesScreen() {
         ),
       },
       {
+        key: 'demo',
+        label: 'Demo',
+        width: 100,
+        render: (item) => (
+          <View style={styles.tableStatContainer}>
+            <MaterialIcons name="play-circle-outline" size={16} color="#2196F3" />
+            <Text style={[styles.tableStatValue, { color: '#2196F3' }]}>
+              {item.total_demo}
+            </Text>
+          </View>
+        ),
+      },
+      {
         key: 'bad_contact',
-        label: 'Bad Contact',
-        width: 120,
+        label: 'BCI',
+        width: 100,
         render: (item) => (
           <View style={styles.tableStatContainer}>
             <MaterialIcons name="phone-disabled" size={16} color="#9E9E9E" />
@@ -321,6 +355,31 @@ export default function EmployeeSurveyOutcomesScreen() {
           </View>
           
           <View style={styles.desktopActions}>
+            {/* Employee Filter Dropdown */}
+            <View style={styles.employeeFilter}>
+              <MaterialIcons name="person" size={20} color="#FFFFFF" />
+              <Pressable
+                style={styles.employeeFilterButton}
+                onPress={() => {
+                  // Show employee picker
+                  showAlert('Filter by Employee', 'Choose an employee to filter', [
+                    { text: 'All Employees', onPress: () => setSelectedEmployeeId(null) },
+                    ...employees.map(emp => ({
+                      text: `${emp.firstName} ${emp.lastName}`,
+                      onPress: () => setSelectedEmployeeId(emp.id)
+                    }))
+                  ]);
+                }}
+              >
+                <Text style={styles.employeeFilterText}>
+                  {selectedEmployeeId 
+                    ? employees.find(e => e.id === selectedEmployeeId)?.firstName + ' ' + employees.find(e => e.id === selectedEmployeeId)?.lastName
+                    : 'All Employees'}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={20} color="#FFFFFF" />
+              </Pressable>
+            </View>
+            
             <View style={styles.periodSelector}>
               {['today', '7d', '30d', 'all'].map((period) => (
                 <Pressable
@@ -377,7 +436,7 @@ export default function EmployeeSurveyOutcomesScreen() {
 
         <View style={styles.desktopContent}>
           <DataTable
-            data={employeeStats}
+            data={displayedStats}
             columns={columns}
             emptyMessage="No employee survey outcomes found for this period"
           />
@@ -415,6 +474,31 @@ export default function EmployeeSurveyOutcomesScreen() {
                 View how employee surveys performed based on Salesforce Lead/Appointment statuses. Stats sync daily from Salesforce.
               </Text>
             </View>
+          </View>
+
+          {/* Employee Filter */}
+          <View style={styles.employeeFilterMobile}>
+            <Text style={styles.filterLabel}>Filter by Employee:</Text>
+            <Pressable
+              style={styles.employeeFilterButtonMobile}
+              onPress={() => {
+                showAlert('Filter by Employee', 'Choose an employee to filter', [
+                  { text: 'All Employees', onPress: () => setSelectedEmployeeId(null) },
+                  ...employees.map(emp => ({
+                    text: `${emp.firstName} ${emp.lastName}`,
+                    onPress: () => setSelectedEmployeeId(emp.id)
+                  }))
+                ]);
+              }}
+            >
+              <MaterialIcons name="person" size={20} color={LOWES_THEME.primary} />
+              <Text style={styles.employeeFilterTextMobile}>
+                {selectedEmployeeId 
+                  ? employees.find(e => e.id === selectedEmployeeId)?.firstName + ' ' + employees.find(e => e.id === selectedEmployeeId)?.lastName
+                  : 'All Employees'}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={20} color={LOWES_THEME.textSubtle} />
+            </Pressable>
           </View>
 
           {/* Period Selector */}
@@ -554,9 +638,9 @@ export default function EmployeeSurveyOutcomesScreen() {
           </View>
 
           {/* Employee List */}
-          {employeeStats.length > 0 ? (
+          {displayedStats.length > 0 ? (
             <View style={styles.employeeList}>
-              {employeeStats.map((emp, index) => (
+              {displayedStats.map((emp, index) => (
                 <View key={emp.employee_id} style={styles.employeeCard}>
                   <View style={styles.employeeHeader}>
                     <View style={styles.employeeRank}>
@@ -600,6 +684,18 @@ export default function EmployeeSurveyOutcomesScreen() {
                     </View>
                     <View style={styles.statBox}>
                       <View style={styles.statIcon}>
+                        <MaterialIcons name="play-circle-outline" size={20} color="#2196F3" />
+                      </View>
+                      <View>
+                        <Text style={styles.statValue}>{emp.total_demo}</Text>
+                        <Text style={styles.statLabel}>Demo</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.statsRow}>
+                    <View style={styles.statBox}>
+                      <View style={styles.statIcon}>
                         <MaterialIcons name="cancel" size={20} color="#F44336" />
                       </View>
                       <View>
@@ -613,7 +709,7 @@ export default function EmployeeSurveyOutcomesScreen() {
                       </View>
                       <View>
                         <Text style={styles.statValue}>{emp.total_bad_contact}</Text>
-                        <Text style={styles.statLabel}>Bad Contact</Text>
+                        <Text style={styles.statLabel}>BCI</Text>
                       </View>
                     </View>
                   </View>
@@ -1013,5 +1109,49 @@ const styles = StyleSheet.create({
   tableRateValue: {
     fontSize: FONTS.sizes.md,
     fontWeight: '700',
+  },
+  employeeFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+  },
+  employeeFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  employeeFilterText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+  },
+  employeeFilterMobile: {
+    gap: SPACING.xs,
+  },
+  filterLabel: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    color: LOWES_THEME.text,
+  },
+  employeeFilterButtonMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: LOWES_THEME.border,
+    backgroundColor: LOWES_THEME.surface,
+  },
+  employeeFilterTextMobile: {
+    flex: 1,
+    fontSize: FONTS.sizes.md,
+    fontWeight: '600',
+    color: LOWES_THEME.text,
   },
 });

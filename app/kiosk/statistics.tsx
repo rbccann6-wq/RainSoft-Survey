@@ -15,6 +15,7 @@ interface EmployeeStats {
   dead_count: number;
   still_contacting_count: number;
   install_count: number;
+  demo_count: number;
   total_surveys: number;
   last_synced_at: string | null;
 }
@@ -24,6 +25,7 @@ interface AggregatedStats {
   total_dead: number;
   total_still_contacting: number;
   total_install: number;
+  total_demo: number;
   total_surveys: number;
   last_sync: string | null;
 }
@@ -35,6 +37,7 @@ interface TeamMemberStats {
   total_dead: number;
   total_still_contacting: number;
   total_install: number;
+  total_demo: number;
   total_surveys: number;
   qualified_count: number;
 }
@@ -42,10 +45,10 @@ interface TeamMemberStats {
 const STAT_CATEGORIES = [
   { 
     key: 'bad_contact', 
-    label: 'Bad Contact', 
+    label: 'BCI', 
     color: '#9E9E9E', 
     icon: 'phone-disabled',
-    description: 'Wrong numbers, disconnected lines, invalid contact info'
+    description: 'Bad Contact Info - wrong numbers, disconnected lines'
   },
   { 
     key: 'dead', 
@@ -68,6 +71,13 @@ const STAT_CATEGORIES = [
     icon: 'check-circle',
     description: 'Closed-won, completed installations, conversions'
   },
+  { 
+    key: 'demo', 
+    label: 'Demo', 
+    color: '#2196F3', 
+    icon: 'play-circle-outline',
+    description: 'Demo appointments scheduled, product demonstrations'
+  },
 ];
 
 export default function StatisticsScreen() {
@@ -83,6 +93,7 @@ export default function StatisticsScreen() {
     total_dead: 0,
     total_still_contacting: 0,
     total_install: 0,
+    total_demo: 0,
     total_surveys: 0,
     last_sync: null,
   });
@@ -141,6 +152,7 @@ export default function StatisticsScreen() {
           total_dead: acc.total_dead + curr.dead_count,
           total_still_contacting: acc.total_still_contacting + curr.still_contacting_count,
           total_install: acc.total_install + curr.install_count,
+          total_demo: acc.total_demo + (curr.demo_count || 0),
           total_surveys: acc.total_surveys + curr.total_surveys,
           last_sync: acc.last_sync || curr.last_synced_at,
         }), {
@@ -148,6 +160,7 @@ export default function StatisticsScreen() {
           total_dead: 0,
           total_still_contacting: 0,
           total_install: 0,
+          total_demo: 0,
           total_surveys: 0,
           last_sync: null,
         });
@@ -158,6 +171,7 @@ export default function StatisticsScreen() {
           total_dead: 0,
           total_still_contacting: 0,
           total_install: 0,
+          total_demo: 0,
           total_surveys: 0,
           last_sync: null,
         });
@@ -216,12 +230,14 @@ export default function StatisticsScreen() {
           total_dead: acc.total_dead + curr.dead_count,
           total_still_contacting: acc.total_still_contacting + curr.still_contacting_count,
           total_install: acc.total_install + curr.install_count,
+          total_demo: acc.total_demo + (curr.demo_count || 0),
           total_surveys: acc.total_surveys + curr.total_surveys,
         }), {
           total_bad_contact: 0,
           total_dead: 0,
           total_still_contacting: 0,
           total_install: 0,
+          total_demo: 0,
           total_surveys: 0,
         });
 
@@ -460,6 +476,10 @@ export default function StatisticsScreen() {
                               <View style={[styles.dailyDot, { backgroundColor: '#4CAF50' }]} />
                               <Text style={styles.dailyStatText}>{dayStat.install_count}</Text>
                             </View>
+                            <View style={styles.dailyStat}>
+                              <View style={[styles.dailyDot, { backgroundColor: '#2196F3' }]} />
+                              <Text style={styles.dailyStatText}>{dayStat.demo_count || 0}</Text>
+                            </View>
                           </View>
                           <Text style={styles.dailyTotal}>Total: {dayStat.total_surveys}</Text>
                         </View>
@@ -503,6 +523,12 @@ export default function StatisticsScreen() {
                         </Text>
                       </View>
                       <View style={styles.teamStatBox}>
+                        <Text style={styles.teamStatLabel}>Demo</Text>
+                        <Text style={[styles.teamStatValue, { color: '#2196F3' }]}>
+                          {member.total_demo}
+                        </Text>
+                      </View>
+                      <View style={styles.teamStatBox}>
                         <Text style={styles.teamStatLabel}>Contacting</Text>
                         <Text style={[styles.teamStatValue, { color: '#FF9800' }]}>
                           {member.total_still_contacting}
@@ -512,6 +538,12 @@ export default function StatisticsScreen() {
                         <Text style={styles.teamStatLabel}>Dead</Text>
                         <Text style={[styles.teamStatValue, { color: '#F44336' }]}>
                           {member.total_dead}
+                        </Text>
+                      </View>
+                      <View style={styles.teamStatBox}>
+                        <Text style={styles.teamStatLabel}>BCI</Text>
+                        <Text style={[styles.teamStatValue, { color: '#9E9E9E' }]}>
+                          {member.total_bad_contact}
                         </Text>
                       </View>
                     </View>

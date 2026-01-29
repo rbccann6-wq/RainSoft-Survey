@@ -13,15 +13,16 @@ import { SPACING, FONTS, LOWES_THEME } from '@/constants/theme';
 interface StatusMapping {
   id: string;
   salesforce_status: string;
-  category: 'bad_contact' | 'dead' | 'still_contacting' | 'install';
+  category: 'bad_contact' | 'dead' | 'still_contacting' | 'install' | 'demo';
   object_type: 'lead' | 'appointment';
 }
 
 const CATEGORIES = [
-  { value: 'bad_contact', label: 'Bad Contact', color: '#9E9E9E', icon: 'phone-disabled' },
+  { value: 'bad_contact', label: 'BCI', color: '#9E9E9E', icon: 'phone-disabled' },
   { value: 'dead', label: 'Dead', color: '#F44336', icon: 'cancel' },
   { value: 'still_contacting', label: 'Still Contacting', color: '#FF9800', icon: 'pending' },
   { value: 'install', label: 'Install', color: '#4CAF50', icon: 'check-circle' },
+  { value: 'demo', label: 'Demo', color: '#2196F3', icon: 'play-circle-outline' },
 ];
 
 export default function SurveyStatsConfigScreen() {
