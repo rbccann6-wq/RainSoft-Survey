@@ -23,6 +23,7 @@ export default function AdminLayout() {
       <Stack.Screen name="sync-dashboard" />
       <Stack.Screen name="duplicates" />
       <Stack.Screen name="onboarding-manager" />
+      <Stack.Screen name="onboarding-test" />
       <Stack.Screen name="field-mapping" />
       <Stack.Screen name="alerts" />
       <Stack.Screen name="notifications" />

@@ -207,6 +207,13 @@ export default function AdminDashboard() {
           description: 'New hire setup',
         },
         {
+          icon: 'play-circle-outline',
+          label: 'Test Onboarding',
+          route: '/(admin)/onboarding-test',
+          color: '#00BCD4',
+          description: 'Test onboarding flow',
+        },
+        {
           icon: 'campaign',
           label: 'Alerts',
           route: '/(admin)/alerts',
