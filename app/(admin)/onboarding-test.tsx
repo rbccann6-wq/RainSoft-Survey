@@ -120,13 +120,70 @@ export default function OnboardingTestScreen() {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       
-      // Complete onboarding
-      showAlert('Onboarding Complete!', 'Test walkthrough finished. Employee data saved successfully.', [
-        {
-          text: 'Back to Admin',
-          onPress: () => router.back(),
-        },
-      ]);
+      // Save all onboarding data to database
+      try {
+        console.log('💾 Saving onboarding data for surveyor@rainsoft.com...');
+        
+        const onboardingData = {
+          employeeId: 'surveyor@rainsoft.com', // This would be the actual employee ID
+          step: 6,
+          personalInfo: {
+            address,
+            city,
+            state,
+            zipCode,
+            dob,
+            ssn,
+            emergencyContact: {
+              name: emergencyName,
+              relationship: emergencyRelationship,
+              phone: emergencyPhone,
+            },
+          },
+          w4Signature,
+          w4Data: {
+            filingStatus,
+            multipleJobs,
+            dependents,
+            additionalWithholding,
+          },
+          i9Signature,
+          i9Data: {
+            citizenship,
+            alienNumber,
+          },
+          driversLicenseUri,
+          directDepositData: {
+            bankName,
+            accountType,
+            routingNumber,
+            accountNumber,
+          },
+          acknowledgments: {
+            readPacket: ackReadPacket,
+            falsifiedSurveys: ackFalsified,
+            equipmentReturn: ackIpad,
+            quotaRequirement: ackQuota,
+          },
+          completedAt: new Date().toISOString(),
+        };
+        
+        // Save onboarding data
+        await StorageService.saveOnboardingData(onboardingData);
+        
+        console.log('✅ Onboarding data saved successfully');
+        
+        // Complete onboarding
+        showAlert('Onboarding Complete!', 'All information has been saved successfully to the database.', [
+          {
+            text: 'Back to Admin',
+            onPress: () => router.back(),
+          },
+        ]);
+      } catch (error) {
+        console.error('❌ Error saving onboarding data:', error);
+        showAlert('Save Error', 'Failed to save onboarding data. Please try again.');
+      }
       return;
     }
     
