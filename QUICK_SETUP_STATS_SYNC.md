@@ -29,19 +29,23 @@ Key: SALESFORCE_APPOINTMENT_REPORT_ID
 Value: 00ORl00000AgL0fMAF
 ```
 
-### 2. Set Employee Aliases (Important!)
+### 2. Employee Aliases (Auto-Generated ✨)
 
-**Go to**: Admin Dashboard → Employees
+**No manual setup required!** Employee aliases are automatically generated when employees are added:
 
-**For each employee:**
-1. Click on employee name to edit
-2. Set **Alias** field to match Salesforce Surveyor value exactly
-   - Example: If Salesforce shows "JDoe", enter "JDoe"
-   - If Salesforce shows "John D.", enter "John D."
-   - Case-insensitive ("jdoe" = "JDoe")
-3. Click **Save**
+**Alias Format:** First 2 letters of first name + Full last name
 
-**Why?** The Salesforce Surveyor field might use nicknames, initials, or codes. The alias ensures perfect matching.
+**Examples:**
+- John Doe → `JoDoe`
+- Jane Smith → `JaSmith`
+- Michael Johnson → `MiJohnson`
+
+**This same alias is used when:**
+- ✅ Syncing surveys to Salesforce (Surveyor field)
+- ✅ Syncing appointments to Salesforce (Surveyor field)
+- ✅ Matching stats back from Salesforce reports
+
+**Result:** Perfect automatic matching with zero configuration needed!
 
 ### 3. Configure Status Mappings
 
@@ -91,36 +95,43 @@ You should see employee stats broken down by:
 
 ## 🔍 How Employee Matching Works
 
-The sync matches Salesforce "Surveyor" field to your employees:
+The sync uses **auto-generated aliases** to match Salesforce "Surveyor" field to employees:
 
-### Priority 1: Alias Field (Recommended ⭐)
-**Best practice**: Set the `alias` field for each employee to match their Salesforce Surveyor value exactly.
+### Alias Format (Automatic)
+**First 2 letters of first name + Full last name**
 
-- Go to **Admin → Employees** → Edit employee
-- Set **Alias** field (e.g., "JDoe", "John D", "Surveyor 5")
-- **Case-insensitive** matching ("jdoe" = "JDoe" = "JDOE")
+**Examples:**
+- John Doe → `JoDoe`
+- Jane Smith → `JaSmith`
+- Michael Johnson → `MiJohnson`
+- Sarah Williams → `SaWilliams`
 
-### Priority 2: Name Fallback (Automatic)
-If no alias is set, the system tries:
-1. **Full name**: "John Doe"
-2. **Reverse name**: "Doe, John"  
-3. **First name**: "John"
-4. **Last name**: "Doe"
-5. **Email prefix**: "john.doe" (from john.doe@example.com)
+### How It Works
+1. **Employee Created** → Alias auto-generated (e.g., John Doe → JoDoe)
+2. **Survey Submitted** → Synced to Salesforce with Surveyor = "JoDoe"
+3. **Salesforce Processing** → Lead/Appointment status updated
+4. **Stats Sync** → Reads Salesforce report: Surveyor = "JoDoe"
+5. **Automatic Match** → "JoDoe" → John Doe's stats updated
+
+### ✅ Key Benefits
+- **Zero configuration** - Aliases generated automatically
+- **100% consistent** - Same alias everywhere (surveys, appointments, stats)
+- **Case-insensitive** - "JoDoe" = "jodoe" = "JODOE"
+- **Self-correcting** - If name changes, alias updates automatically
 
 ### ⚠️ Troubleshooting Unmatched Surveyors
 
 If you see `"No employee found for Surveyor: 'XYZ'"` in logs:
 
-**Best Solution - Set Alias (Recommended):**
-- Go to Admin → Employees
-- Edit employee record
-- Set **Alias** field to match Salesforce Surveyor value exactly
-- Save and re-run sync
+**Likely Causes:**
+1. **Old survey data** with different alias format
+2. **Manually edited** Surveyor field in Salesforce
+3. **Employee deleted** from system
 
-**Alternative - Update Salesforce:**
-- Ensure Surveyor field uses employee's full name
-- Format: "First Last" or "Last, First"
+**Solution:**
+- Check employee name matches Salesforce Surveyor format
+- Verify employee exists in system
+- Re-sync surveys to update Surveyor field format
 
 ---
 

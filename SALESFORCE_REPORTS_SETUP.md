@@ -132,25 +132,32 @@ Click **Add Secret** and create these two entries:
 
 ---
 
-## Configure Employee Aliases (Important!)
+## Employee Alias Auto-Generation
 
-Before running the sync, set up employee aliases for accurate matching:
+Employee aliases are **automatically generated** when employees are added to the system:
 
-### 1. Go to Admin → Employees
-- Click **Admin Dashboard** → **Employees**
+### Alias Format
+**First 2 letters of First Name + Full Last Name**
 
-### 2. Edit Each Employee
-- Click on employee name
-- Find the **Alias** field
-- Set it to match the Salesforce Surveyor field value exactly
-  - Example: If Salesforce shows "JDoe", enter "JDoe"
-  - If Salesforce shows "John D.", enter "John D."
-  - Case doesn't matter ("jdoe" = "JDoe")
+**Examples:**
+- John Doe → `JoDoe`
+- Jane Smith → `JaSmith`
+- Michael Johnson → `MiJohnson`
+- Sarah Williams → `SaWilliams`
 
-### 3. Save Changes
-- Click **Save** for each employee
+### How It Works
+1. When an employee is created, the system automatically generates their alias
+2. This same alias is used when syncing surveys/appointments to Salesforce
+3. The Salesforce "Surveyor" field will contain this alias
+4. Stats sync matches the Surveyor field back to employees using this alias
 
-**Why use alias?** The Surveyor field in Salesforce might use nicknames, initials, or codes that don't match full names. The alias field ensures perfect matching every time.
+### No Manual Configuration Needed!
+✅ Aliases are created automatically  
+✅ Consistent across all surveys and appointments  
+✅ Guaranteed matching between OnSpace and Salesforce  
+✅ Case-insensitive matching (JoDoe = jodoe = JODOE)
+
+**Note:** If an employee's name changes, their alias will automatically update to match the new name format.
 
 ---
 

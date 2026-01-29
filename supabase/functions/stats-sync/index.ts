@@ -270,64 +270,38 @@ Deno.serve(async (req) => {
       }
 
       // Create mapping: Surveyor value → Employee ID
-      // Priority:
-      // 1. Exact alias match (case-insensitive)
-      // 2. Fallback to name variations for backwards compatibility
+      // Alias format: First 2 letters of first name + Full last name
+      // Example: John Doe → JoDoe, Jane Smith → JaSmith
       const surveyorMap = new Map<string, string>();
       for (const emp of employees || []) {
         const alias = emp.alias?.trim() || '';
-        const firstName = emp.first_name?.trim() || '';
-        const lastName = emp.last_name?.trim() || '';
-        const fullName = `${firstName} ${lastName}`.trim();
-        const reverseName = `${lastName}, ${firstName}`.trim();
-        const emailPrefix = emp.email?.split('@')[0]?.trim() || '';
         
-        // PRIORITY 1: Alias (exact match, case-insensitive)
+        // Primary matching: Use the auto-generated alias (first 2 letters first name + last name)
         if (alias) {
-          surveyorMap.set(alias, emp.id);
+          // Case-insensitive matching
           surveyorMap.set(alias.toLowerCase(), emp.id);
         }
-        
-        // PRIORITY 2: Name variations (fallback for employees without alias set)
-        if (fullName) surveyorMap.set(fullName, emp.id);
-        if (reverseName) surveyorMap.set(reverseName, emp.id);
-        if (firstName) surveyorMap.set(firstName, emp.id);
-        if (lastName) surveyorMap.set(lastName, emp.id);
-        if (emailPrefix) surveyorMap.set(emailPrefix, emp.id);
-        
-        // Also try lowercase versions for case-insensitive matching
-        if (fullName) surveyorMap.set(fullName.toLowerCase(), emp.id);
-        if (reverseName) surveyorMap.set(reverseName.toLowerCase(), emp.id);
-        if (firstName) surveyorMap.set(firstName.toLowerCase(), emp.id);
-        if (lastName) surveyorMap.set(lastName.toLowerCase(), emp.id);
       }
 
       // Update employee stats with correct employee IDs
       const finalStats: EmployeeStats[] = [];
       const unmatchedSurveyors = new Set<string>();
-      const matchedByAlias: string[] = [];
-      const matchedByName: string[] = [];
+      const matchedCount = { byAlias: 0, unmatched: 0 };
       
       for (const [key, stats] of employeeStatsMap.entries()) {
         const surveyorValue = stats.employee_id;
         
-        // Try to find employee ID (case-sensitive first, then case-insensitive)
-        let employeeId = surveyorMap.get(surveyorValue) || surveyorMap.get(surveyorValue.toLowerCase());
+        // Match by alias (case-insensitive)
+        const employeeId = surveyorMap.get(surveyorValue.toLowerCase());
         
         if (!employeeId) {
           unmatchedSurveyors.add(surveyorValue);
+          matchedCount.unmatched++;
           console.log(`⚠️  No employee found for Surveyor: "${surveyorValue}" - skipping`);
           continue;
         }
 
-        // Track how the match was made for logging
-        const matchedEmployee = (employees || []).find(e => e.id === employeeId);
-        if (matchedEmployee?.alias?.toLowerCase() === surveyorValue.toLowerCase()) {
-          matchedByAlias.push(surveyorValue);
-        } else {
-          matchedByName.push(surveyorValue);
-        }
-
+        matchedCount.byAlias++;
         finalStats.push({
           ...stats,
           employee_id: employeeId,
@@ -335,12 +309,12 @@ Deno.serve(async (req) => {
       }
 
       console.log(`✓ Matched ${finalStats.length} employee stat records`);
-      console.log(`   - Matched by alias: ${matchedByAlias.length}`);
-      console.log(`   - Matched by name: ${matchedByName.length}`);
+      console.log(`   - Matched by alias (First2+Last): ${matchedCount.byAlias}`);
       
       if (unmatchedSurveyors.size > 0) {
-        console.log(`⚠️  Unmatched surveyors (${unmatchedSurveyors.size}): ${Array.from(unmatchedSurveyors).join(', ')}`);
-        console.log(`   TIP: Set the 'alias' field in employee records to match the Salesforce Surveyor field exactly`);
+        console.log(`⚠️  Unmatched surveyors (${matchedCount.unmatched}): ${Array.from(unmatchedSurveyors).join(', ')}`);
+        console.log(`   NOTE: Surveyor field should match format: First 2 letters of first name + Last name`);
+        console.log(`   Example: John Doe → JoDoe, Jane Smith → JaSmith`);
       }
 
       // Step 6: Upsert to employee_survey_stats table
