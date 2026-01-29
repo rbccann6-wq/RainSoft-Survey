@@ -29,7 +29,21 @@ Key: SALESFORCE_APPOINTMENT_REPORT_ID
 Value: 00ORl00000AgL0fMAF
 ```
 
-### 2. Configure Status Mappings
+### 2. Set Employee Aliases (Important!)
+
+**Go to**: Admin Dashboard → Employees
+
+**For each employee:**
+1. Click on employee name to edit
+2. Set **Alias** field to match Salesforce Surveyor value exactly
+   - Example: If Salesforce shows "JDoe", enter "JDoe"
+   - If Salesforce shows "John D.", enter "John D."
+   - Case-insensitive ("jdoe" = "JDoe")
+3. Click **Save**
+
+**Why?** The Salesforce Surveyor field might use nicknames, initials, or codes. The alias ensures perfect matching.
+
+### 3. Configure Status Mappings
 
 **Go to**: Admin Dashboard → Survey Stats Config
 
@@ -49,7 +63,7 @@ Map your Salesforce statuses to categories:
 - Appointment Staus "Demo Scheduled" → Demo
 - Appointment Staus "Installed" → Install
 
-### 3. Test the Sync
+### 4. Test the Sync
 
 **Go to**: Admin Dashboard → Stats Sync → Click "Run Stats Sync Now"
 
@@ -61,7 +75,7 @@ Expected result:
 ✅ Saved Z employee stat records
 ```
 
-### 4. View Results
+### 5. View Results
 
 **Go to**: Admin Dashboard → Survey Outcomes
 
@@ -77,27 +91,35 @@ You should see employee stats broken down by:
 
 ## 🔍 How Employee Matching Works
 
-The sync matches Salesforce "Surveyor" field to your employees using:
+The sync matches Salesforce "Surveyor" field to your employees:
 
+### Priority 1: Alias Field (Recommended ⭐)
+**Best practice**: Set the `alias` field for each employee to match their Salesforce Surveyor value exactly.
+
+- Go to **Admin → Employees** → Edit employee
+- Set **Alias** field (e.g., "JDoe", "John D", "Surveyor 5")
+- **Case-insensitive** matching ("jdoe" = "JDoe" = "JDOE")
+
+### Priority 2: Name Fallback (Automatic)
+If no alias is set, the system tries:
 1. **Full name**: "John Doe"
 2. **Reverse name**: "Doe, John"  
 3. **First name**: "John"
 4. **Last name**: "Doe"
 5. **Email prefix**: "john.doe" (from john.doe@example.com)
 
-**Case-insensitive matching** is enabled for flexibility.
-
 ### ⚠️ Troubleshooting Unmatched Surveyors
 
 If you see `"No employee found for Surveyor: 'XYZ'"` in logs:
 
-**Option 1**: Update employee record in OnSpace
+**Best Solution - Set Alias (Recommended):**
 - Go to Admin → Employees
-- Edit employee
-- Ensure First Name + Last Name matches Salesforce Surveyor field
+- Edit employee record
+- Set **Alias** field to match Salesforce Surveyor value exactly
+- Save and re-run sync
 
-**Option 2**: Update Surveyor field in Salesforce
-- Ensure it uses employee's actual name
+**Alternative - Update Salesforce:**
+- Ensure Surveyor field uses employee's full name
 - Format: "First Last" or "Last, First"
 
 ---

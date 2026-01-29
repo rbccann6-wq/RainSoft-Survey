@@ -257,33 +257,38 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Step 5: Match Salesforce Surveyor names to employee IDs
+      // Step 5: Match Salesforce Surveyor field to employee IDs using alias
       console.log('🔍 Matching Salesforce Surveyor field to employees...');
       
-      // Get all employees
+      // Get all employees with alias field
       const { data: employees, error: employeesError } = await supabase
         .from('employees')
-        .select('id, first_name, last_name, email');
+        .select('id, alias, first_name, last_name, email');
 
       if (employeesError) {
         throw new Error(`Failed to load employees: ${employeesError.message}`);
       }
 
-      // Create mapping: Surveyor name variations → Employee ID
-      // Try multiple name formats to maximize matches:
-      // - "First Last"
-      // - "Last, First"
-      // - "First"
-      // - Email prefix (before @)
+      // Create mapping: Surveyor value → Employee ID
+      // Priority:
+      // 1. Exact alias match (case-insensitive)
+      // 2. Fallback to name variations for backwards compatibility
       const surveyorMap = new Map<string, string>();
       for (const emp of employees || []) {
+        const alias = emp.alias?.trim() || '';
         const firstName = emp.first_name?.trim() || '';
         const lastName = emp.last_name?.trim() || '';
         const fullName = `${firstName} ${lastName}`.trim();
         const reverseName = `${lastName}, ${firstName}`.trim();
         const emailPrefix = emp.email?.split('@')[0]?.trim() || '';
         
-        // Map all variations to the same employee ID
+        // PRIORITY 1: Alias (exact match, case-insensitive)
+        if (alias) {
+          surveyorMap.set(alias, emp.id);
+          surveyorMap.set(alias.toLowerCase(), emp.id);
+        }
+        
+        // PRIORITY 2: Name variations (fallback for employees without alias set)
         if (fullName) surveyorMap.set(fullName, emp.id);
         if (reverseName) surveyorMap.set(reverseName, emp.id);
         if (firstName) surveyorMap.set(firstName, emp.id);
@@ -300,17 +305,27 @@ Deno.serve(async (req) => {
       // Update employee stats with correct employee IDs
       const finalStats: EmployeeStats[] = [];
       const unmatchedSurveyors = new Set<string>();
+      const matchedByAlias: string[] = [];
+      const matchedByName: string[] = [];
       
       for (const [key, stats] of employeeStatsMap.entries()) {
-        const surveyorName = stats.employee_id;
+        const surveyorValue = stats.employee_id;
         
         // Try to find employee ID (case-sensitive first, then case-insensitive)
-        let employeeId = surveyorMap.get(surveyorName) || surveyorMap.get(surveyorName.toLowerCase());
+        let employeeId = surveyorMap.get(surveyorValue) || surveyorMap.get(surveyorValue.toLowerCase());
         
         if (!employeeId) {
-          unmatchedSurveyors.add(surveyorName);
-          console.log(`⚠️  No employee found for Surveyor: "${surveyorName}" - skipping`);
+          unmatchedSurveyors.add(surveyorValue);
+          console.log(`⚠️  No employee found for Surveyor: "${surveyorValue}" - skipping`);
           continue;
+        }
+
+        // Track how the match was made for logging
+        const matchedEmployee = (employees || []).find(e => e.id === employeeId);
+        if (matchedEmployee?.alias?.toLowerCase() === surveyorValue.toLowerCase()) {
+          matchedByAlias.push(surveyorValue);
+        } else {
+          matchedByName.push(surveyorValue);
         }
 
         finalStats.push({
@@ -320,9 +335,12 @@ Deno.serve(async (req) => {
       }
 
       console.log(`✓ Matched ${finalStats.length} employee stat records`);
+      console.log(`   - Matched by alias: ${matchedByAlias.length}`);
+      console.log(`   - Matched by name: ${matchedByName.length}`);
       
       if (unmatchedSurveyors.size > 0) {
         console.log(`⚠️  Unmatched surveyors (${unmatchedSurveyors.size}): ${Array.from(unmatchedSurveyors).join(', ')}`);
+        console.log(`   TIP: Set the 'alias' field in employee records to match the Salesforce Surveyor field exactly`);
       }
 
       // Step 6: Upsert to employee_survey_stats table

@@ -132,15 +132,38 @@ Click **Add Secret** and create these two entries:
 
 ---
 
+## Configure Employee Aliases (Important!)
+
+Before running the sync, set up employee aliases for accurate matching:
+
+### 1. Go to Admin → Employees
+- Click **Admin Dashboard** → **Employees**
+
+### 2. Edit Each Employee
+- Click on employee name
+- Find the **Alias** field
+- Set it to match the Salesforce Surveyor field value exactly
+  - Example: If Salesforce shows "JDoe", enter "JDoe"
+  - If Salesforce shows "John D.", enter "John D."
+  - Case doesn't matter ("jdoe" = "JDoe")
+
+### 3. Save Changes
+- Click **Save** for each employee
+
+**Why use alias?** The Surveyor field in Salesforce might use nicknames, initials, or codes that don't match full names. The alias field ensures perfect matching every time.
+
+---
+
 ## Test the Sync
 
 ### Manual Test (via Admin Dashboard)
 
-1. Go to **Admin Dashboard** → **Sync Status**
-2. Click **Test Stats Sync** (or trigger manually)
+1. Go to **Admin Dashboard** → **Stats Sync**
+2. Click **Run Stats Sync Now**
 3. Check the sync log for:
    - ✅ "Lead report returned X rows"
    - ✅ "Appointment report returned Y rows"
+   - ✅ "Matched by alias: X" (should match most/all employees)
    - ✅ "Saved Z employee stat records"
 
 ### Expected Output
@@ -171,15 +194,24 @@ Click **Add Secret** and create these two entries:
 
 ### Issue: "No employee found for Surveyor"
 **Solution**: 
-1. Check the exact format of Surveyor names in Salesforce (e.g., "John Doe" vs "Doe, John")
-2. Ensure employee names in OnSpace match exactly (first name + last name)
-3. The system tries multiple formats:
-   - "First Last"
-   - "Last, First"
-   - First name only
-   - Last name only
-   - Email prefix (before @)
-4. Check employee records have correct first_name and last_name fields populated
+
+**Best Practice - Set Alias Field (Recommended):**
+1. Go to **Admin → Employees** in OnSpace
+2. Edit each employee record
+3. Set the **Alias** field to match the Salesforce Surveyor value exactly
+   - Example: If Salesforce shows "JDoe", set alias to "JDoe"
+   - Case-insensitive ("jdoe" = "JDoe" = "JDOE")
+4. Save and re-run sync
+
+**Alternative - Name Matching (Automatic Fallback):**
+If no alias is set, the system tries multiple name formats:
+   - "First Last" (e.g., "John Doe")
+   - "Last, First" (e.g., "Doe, John")
+   - First name only ("John")
+   - Last name only ("Doe")
+   - Email prefix ("john.doe" from john.doe@example.com)
+
+**TIP**: Setting the alias field ensures 100% accurate matching and is the recommended approach!
 
 ### Issue: Report ID not working
 **Solution**: 
