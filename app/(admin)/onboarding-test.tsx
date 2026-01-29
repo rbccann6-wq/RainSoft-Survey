@@ -239,19 +239,15 @@ export default function OnboardingTestScreen() {
                 color: LOWES_THEME.primary,
               },
               listView: {
-                position: 'absolute',
-                top: 50,
-                left: 0,
-                right: 0,
                 backgroundColor: '#FFFFFF',
                 borderRadius: 8,
-                elevation: 5,
+                elevation: 3,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-                zIndex: 1000,
-                maxHeight: 200,
+                shadowOpacity: 0.15,
+                shadowRadius: 2,
+                marginTop: SPACING.xs,
+                maxHeight: 150,
               },
               row: {
                 padding: SPACING.md,
@@ -792,9 +788,13 @@ export default function OnboardingTestScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={100}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 140 : 20}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
@@ -896,6 +896,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.lg,
+    paddingBottom: 120, // Extra space for navigation buttons + keyboard
   },
   stepContent: {
     gap: SPACING.lg,
@@ -912,6 +913,7 @@ const styles = StyleSheet.create({
   },
   formSection: {
     gap: SPACING.md,
+    marginBottom: SPACING.md,
   },
   formSectionTitle: {
     fontSize: FONTS.sizes.lg,
@@ -936,8 +938,7 @@ const styles = StyleSheet.create({
   },
   googlePlacesContainer: {
     minHeight: 50,
-    marginBottom: SPACING.md,
-    zIndex: 1000,
+    marginBottom: SPACING.sm,
   },
   radioGroup: {
     gap: SPACING.sm,
@@ -1166,6 +1167,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: LOWES_THEME.border,
     backgroundColor: LOWES_THEME.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
   },
   demoBanner: {
     flexDirection: 'row',
