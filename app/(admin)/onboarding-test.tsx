@@ -686,135 +686,138 @@ export default function OnboardingTestScreen() {
       <View style={styles.hiringPacketDocument}>
         <View style={styles.documentHeader}>
           <MaterialIcons name="description" size={32} color={LOWES_THEME.primary} />
-          <Text style={styles.documentTitle}>RainSoft Employment Agreement</Text>
+          <Text style={styles.documentTitle}>RainSoft of the Wiregrass In-Store Surveyor Employment Packet</Text>
         </View>
         
         <ScrollView style={styles.documentScroll} nestedScrollEnabled={true}>
           <Text style={styles.documentText}>
-            <Text style={styles.documentBold}>EMPLOYMENT TERMS AND CONDITIONS{`\n\n`}</Text>
+            <Text style={styles.documentBold}>Welcome{`\n\n`}</Text>
+            We're excited about your interest in joining RainSoft of the Wiregrass as an In-Store Surveyor. This packet is designed to clearly explain the role, training process, compensation, and expectations so you feel confident and supported from day one.{`\n\n`}
+            Our goal is to create a professional, respectful, and positive experience for our team members, our customers, and our partners at The Home Depot and Lowe's.{`\n\n`}
             
-            <Text style={styles.documentBold}>Position:{`\n`}</Text>
-            Survey Marketing Representative - 1099 Independent Contractor{`\n\n`}
+            <Text style={styles.documentBold}>Position Overview{`\n\n`}</Text>
+            As an In-Store Surveyor, you represent both RainSoft of the Wiregrass and The Home Depot and Lowe's. You are often the first point of contact for potential customers, making professionalism, courtesy, and accuracy essential.{`\n\n`}
+            Your primary responsibility is to engage customers in a friendly manner and invite them to participate in a brief Water Awareness Survey.{`\n\n`}
             
-            <Text style={styles.documentBold}>Compensation Structure:{`\n`}</Text>
-            • Base Pay: ${compensationSettings.baseHourlyRate}/hour (for meeting minimum quota of {compensationSettings.quota} qualified surveys per hour){`\n`}
-            • Survey Install Bonus: ${compensationSettings.surveyInstallBonus} per completed installation from your survey{`\n`}
-            • Appointment Install Bonus: ${compensationSettings.appointmentInstallBonus} per completed installation from appointment you set{`\n`}
-            • Training Period: Up to 25 hours at $15/hour{`\n`}
-            • Performance Raises: $0.50/hour increase every 30 days (maximum $18/hour){`\n`}
-            • 30-Day Bonus: $100 upon successful completion of 30-day evaluation period{`\n\n`}
+            <Text style={styles.documentBold}>Training Program{`\n\n`}</Text>
+            All new Surveyors begin with a paid training program, designed to ensure you are fully prepared and confident in your role.{`\n\n`}
             
-            <Text style={styles.documentBold}>Work Requirements:{`\n`}</Text>
-            1. Maintain minimum quota of {compensationSettings.quota} qualified surveys per hour worked{`\n`}
-            2. Complete accurate surveys with valid homeowner information{`\n`}
-            3. Clock in/out using company iPad at assigned retail locations{`\n`}
-            4. Submit all surveys and appointments through company system{`\n`}
-            5. Wear professional attire and maintain professional conduct{`\n`}
-            6. Attend all required training sessions{`\n\n`}
+            <Text style={styles.documentBold}>Training Details{`\n`}</Text>
+            • Training lasts up to 25 hours{`\n`}
+            • Training pay is $15.00 per hour, provided expectations are met{`\n`}
+            • Training includes: Customer engagement techniques, Approved scripts and responses, Survey completion standards, Store conduct and professionalism{`\n\n`}
+            Training is intended to be supportive and hands-on. Once you demonstrate the required skills and can accurately complete surveys, you will transition into your regular working role. If either you or the company determine the position is not the right fit during training, you may exit the program and will be paid for qualifying hours worked.{`\n\n`}
             
-            <Text style={styles.documentBold}>CRITICAL POLICIES:{`\n\n`}</Text>
+            <Text style={styles.documentBold}>Employment Classification{`\n\n`}</Text>
+            • During training, you are compensated for qualifying hours worked{`\n`}
+            • You will receive a 1099 for applicable earnings and are responsible for your own tax obligations{`\n`}
+            • Employment with RainSoft of the Wiregrass is at-will, meaning either party may end the working relationship at any time{`\n\n`}
             
-            <Text style={styles.documentBold}>1. SURVEY VERIFICATION AND CONSEQUENCES{`\n`}</Text>
-            All surveys submitted are verified by RainSoft home office against the following criteria:{`\n`}
-            • Homeownership status (renters disqualified){`\n`}
-            • Valid contact information (working phone number and email){`\n`}
-            • Legitimate interest in water treatment systems{`\n`}
-            • Accurate location data matching retail store location{`\n\n`}
+            <Text style={styles.documentBold}>Compensation & Incentives{`\n\n`}</Text>
             
-            <Text style={styles.documentBold}>Falsified surveys include but are not limited to:{`\n`}</Text>
-            • Surveys from non-homeowners{`\n`}
-            • Fake phone numbers or contact information{`\n`}
-            • Duplicate surveys from same household{`\n`}
-            • Surveys completed outside of clocked hours{`\n`}
-            • Self-surveys or surveys from family/friends{`\n`}
-            • Surveys with fabricated responses{`\n\n`}
+            <Text style={styles.documentBold}>Training Pay{`\n`}</Text>
+            $15/hour for up to 25 training hours IF MINIMUM REQUIREMENT MET{`\n\n`}
             
-            <Text style={styles.documentBold}>CONSEQUENCES FOR FALSIFIED SURVEYS:{`\n`}</Text>
-            • IMMEDIATE TERMINATION - no exceptions{`\n`}
-            • All hours worked paid at MINIMUM WAGE ONLY (no bonuses){`\n`}
-            • No eligibility for rehire{`\n`}
-            • Forfeiture of all pending bonuses and raises{`\n`}
-            • Potential legal action for fraud if losses exceed $500{`\n\n`}
+            <Text style={styles.documentBold}>Standard Pay (After Training){`\n`}</Text>
+            $15/hour for meeting quota (5 qualified surveys per hour){`\n\n`}
             
-            <Text style={styles.documentBold}>2. COMPANY EQUIPMENT POLICY{`\n`}</Text>
-            You will be issued company equipment including but not limited to:{`\n`}
-            • iPad with survey application{`\n`}
-            • Charging accessories{`\n`}
-            • Marketing materials{`\n`}
-            • Company identification badge{`\n\n`}
+            <Text style={styles.documentBold}>Bonuses & Raises{`\n`}</Text>
+            • $100 performance bonus after 30-day evaluation (attendance & survey quality){`\n`}
+            • $0.50/hour raise after each additional 30-day evaluation, up to $18/hour{`\n`}
+            • $10 bonus for each completed install resulting from your survey{`\n`}
+            • $25 for every Appointment set that installs{`\n\n`}
+            Qualified surveys must meet all outlined requirements to count toward quotas and bonuses.{`\n\n`}
             
-            <Text style={styles.documentBold}>Equipment Return Requirements:{`\n`}</Text>
-            ALL company equipment must be returned within 24 hours of separation from employment (voluntary or involuntary). Equipment must be returned in working condition with normal wear and tear expected.{`\n\n`}
+            <Text style={styles.documentBold}>Survey Qualification Standards{`\n\n`}</Text>
+            A survey is considered qualified when it meets all of the following:{`\n\n`}
+            1. Customer is a homeowner or in the process of purchasing a home{`\n`}
+            2. Customer does not currently use a salt-based water treatment system{`\n`}
+            3. All survey questions are completed{`\n`}
+            4. Customer provides a full name and valid phone number{`\n`}
+            5. Survey is signed or digitally completed{`\n\n`}
+            Accuracy and honesty are critical. Surveys are verified by the RainSoft home office.{`\n\n`}
             
-            <Text style={styles.documentBold}>CONSEQUENCES FOR UNRETURNED EQUIPMENT:{`\n`}</Text>
-            • Criminal theft charges will be filed with local law enforcement{`\n`}
-            • Final paycheck will be WITHHELD pending equipment return{`\n`}
-            • Civil lawsuit for replacement value of equipment ($800-$1,500){`\n`}
-            • Debt sent to collections affecting credit score{`\n`}
-            • Prosecution to fullest extent of law{`\n\n`}
+            <Text style={styles.documentBold}>Performance Expectations{`\n\n`}</Text>
+            Surveyors are expected to:{`\n\n`}
+            • Maintain an average of 5 qualified surveys per hour{`\n`}
+            • Actively engage customers while on paid time{`\n`}
+            • Follow approved scripts and survey procedures{`\n`}
+            • Maintain a professional and respectful demeanor at all times{`\n\n`}
+            If performance falls below expectations, coaching may be provided. Continued performance challenges may result in reassignment or separation from the program.{`\n\n`}
+            Falsifying surveys or customer information will result in immediate separation and adjustment of pay to minimum wage as permitted by law.{`\n\n`}
             
-            <Text style={styles.documentBold}>3. PERFORMANCE QUOTA SYSTEM{`\n`}</Text>
-            Minimum quota: {compensationSettings.quota} qualified surveys per hour worked (calculated weekly){`\n\n`}
+            <Text style={styles.documentBold}>Professional Conduct & Store Guidelines{`\n\n`}</Text>
+            While working in The Home Depot/Lowe's, you must:{`\n\n`}
+            • Follow all store rules and policies{`\n`}
+            • Treat customers and staff with respect{`\n`}
+            • Never argue or pressure customers{`\n\n`}
+            Positive customer interactions are always the priority.{`\n\n`}
             
-            Performance is evaluated every Friday based on:{`\n`}
-            • Total qualified surveys submitted{`\n`}
-            • Total hours worked (clock-in to clock-out){`\n`}
-            • Survey quality and verification success rate{`\n\n`}
+            <Text style={styles.documentBold}>Attire & Appearance{`\n\n`}</Text>
+            Surveyors are required to maintain a clean, professional appearance:{`\n\n`}
+            • Company-issued RainSoft/Home Depot/Lowe's apron and badge must be worn at all times{`\n`}
+            • Acceptable clothing: jeans, khakis, slacks, collared shirts, polos, or approved company shirts{`\n`}
+            • Closed-toe shoes required{`\n`}
+            • No flip-flops, open-toe shoes, or inappropriate graphics{`\n\n`}
+            Uniform items are company property and must be returned upon separation.{`\n\n`}
             
-            <Text style={styles.documentBold}>Performance Tiers:{`\n`}</Text>
-            • Below {compensationSettings.quota} surveys/hour: Written warning, minimum wage pay for that week{`\n`}
-            • 2 consecutive weeks below quota: Probation status, additional training required{`\n`}
-            • 3 consecutive weeks below quota: Separation from program{`\n`}
-            • Meeting/exceeding quota: Full hourly rate + bonuses{`\n\n`}
+            <Text style={styles.documentBold}>Time & Attendance Policy{`\n\n`}</Text>
+            • Arrive on time and work scheduled shifts{`\n`}
+            • Request time off at least 7 days in advance{`\n`}
+            • Clock in and out according to your assigned schedule{`\n\n`}
+            Time worked outside scheduled hours must be approved by a manager to be paid.{`\n\n`}
             
-            <Text style={styles.documentBold}>4. INDEPENDENT CONTRACTOR STATUS{`\n`}</Text>
-            You are hired as a 1099 independent contractor, NOT an employee. This means:{`\n`}
-            • You are responsible for your own taxes (federal, state, self-employment){`\n`}
-            • No tax withholding - you will receive Form 1099-NEC at year end{`\n`}
-            • No benefits (health insurance, paid time off, unemployment){`\n`}
-            • You set your own schedule within available store hours{`\n`}
-            • You may work for other companies during off-hours{`\n\n`}
+            <Text style={styles.documentBold}>Equipment & Tablet Policy{`\n\n`}</Text>
+            Tablets are provided as a required work tool.{`\n\n`}
+            Employees agree to:{`\n\n`}
+            • Use the tablet only for company business{`\n`}
+            • Protect equipment from damage or loss{`\n`}
+            • Keep tracking and security settings enabled{`\n`}
+            • Return all equipment upon separation{`\n\n`}
+            Failure to return company equipment may result in payroll deductions or further action as allowed by law.{`\n\n`}
             
-            <Text style={styles.documentBold}>5. SCHEDULE AND ATTENDANCE{`\n`}</Text>
-            • You select your own schedule through the app{`\n`}
-            • Once scheduled, you are expected to work those hours{`\n`}
-            • Late arrivals (>15 minutes) without notice may result in shift cancellation{`\n`}
-            • No-shows result in immediate removal from schedule for 1 week{`\n`}
-            • 2 no-shows in 30 days = separation from program{`\n`}
-            • Time-off requests must be submitted 7 days in advance{`\n\n`}
+            <Text style={styles.documentBold}>Customer Information & Confidentiality{`\n\n`}</Text>
+            All customer and prospect information obtained during employment or training is confidential and the property of RainSoft of the Wiregrass and The Home Depot/Lowe's.{`\n\n`}
+            Employees agree not to:{`\n\n`}
+            • Contact customers for non-company purposes{`\n`}
+            • Share customer information with third parties{`\n\n`}
+            These obligations continue after employment ends.{`\n\n`}
             
-            <Text style={styles.documentBold}>6. PAYMENT TERMS{`\n`}</Text>
-            • Payroll processed every other Friday via direct deposit{`\n`}
-            • Survey/appointment bonuses paid when installation is COMPLETED (30-90 days){`\n`}
-            • Disputed surveys may delay bonus payment pending verification{`\n`}
-            • Final paycheck issued within 7 days of separation (minus equipment costs if applicable){`\n\n`}
+            <Text style={styles.documentBold}>Drug Testing & Background Checks{`\n\n`}</Text>
+            Employment may be contingent upon:{`\n\n`}
+            • Background checks as permitted by law{`\n`}
+            • Random drug testing during employment{`\n\n`}
+            All checks are conducted in accordance with applicable state and federal laws.{`\n\n`}
             
-            <Text style={styles.documentBold}>7. TERMINATION{`\n`}</Text>
-            Either party may terminate this agreement at any time with or without cause. Immediate termination may occur for:{`\n`}
-            • Falsified surveys (see Section 1){`\n`}
-            • Theft or damage to company property{`\n`}
-            • Harassment or unprofessional conduct{`\n`}
-            • Violation of retail store policies{`\n`}
-            • Failure to meet quota for 3+ weeks{`\n`}
-            • No-show/no-call incidents{`\n\n`}
-            
-            <Text style={styles.documentBold}>8. CONFIDENTIALITY{`\n`}</Text>
-            You agree not to share:{`\n`}
-            • Customer contact information with any third party{`\n`}
-            • Company survey techniques or scripts with competitors{`\n`}
-            • Compensation structure or bonus details{`\n`}
-            Violation may result in legal action and termination.{`\n\n`}
-            
-            <Text style={styles.documentBold}>9. AGREEMENT ACKNOWLEDGMENT{`\n`}</Text>
-            By signing below, you acknowledge that:{`\n`}
-            • You have READ and UNDERSTAND this entire agreement{`\n`}
-            • You agree to ALL terms, conditions, and policies outlined above{`\n`}
-            • You understand consequences for policy violations{`\n`}
-            • You are entering this agreement voluntarily{`\n`}
-            • You have had opportunity to ask questions and seek legal counsel{`\n`}
-            • This constitutes the entire agreement between parties{`\n`}
+            <Text style={styles.documentBold}>Acknowledgment & Agreement{`\n\n`}</Text>
+            By signing below, you acknowledge that you:{`\n\n`}
+            • Have read and understand this packet{`\n`}
+            • Agree to follow all policies and expectations{`\n`}
+            • Confirm that information provided during the hiring process is accurate{`\n`}
           </Text>
         </ScrollView>
+      </View>
+      
+      {/* Read Acknowledgment */}
+      <View style={styles.policyCard}>
+        <View style={styles.policyHeader}>
+          <MaterialIcons name="check-circle" size={24} color={LOWES_THEME.primary} />
+          <Text style={styles.policyTitle}>Employment Packet Acknowledgment</Text>
+        </View>
+        <Text style={styles.policyContent}>
+          I have read and understand the complete RainSoft of the Wiregrass In-Store Surveyor Employment Packet above.
+        </Text>
+        <Pressable
+          style={styles.checkboxRow}
+          onPress={() => {
+            // This will be handled by the critical acknowledgments below
+          }}
+        >
+          <View style={[styles.checkbox, (ackFalsified && ackIpad && ackQuota) && styles.checkboxChecked]}>
+            {(ackFalsified && ackIpad && ackQuota) && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
+          </View>
+          <Text style={styles.checkboxLabel}>I acknowledge that I have read this packet</Text>
+        </Pressable>
       </View>
 
       <Text style={styles.acknowledgmentHeader}>Required Acknowledgments</Text>
