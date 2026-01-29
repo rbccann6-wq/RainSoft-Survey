@@ -133,8 +133,8 @@ const mapSurveyToSalesforceFields = async (survey: Survey) => {
   const recordTypeId = isLowes ? '012Rl000007imrJIAQ' : '01236000001QBdgAAG';
   const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
   
-  // Map tastes/odors answer (already formatted as "tastes;odors" or "None")
-  const tastesOdorsValue = answers.tastes_odors || 'None';
+  // Map tastes/odors answer (already formatted as "Tastes;Odors" or "No Problems")
+  const tastesOdorsValue = answers.tastes_odors || 'No Problems';
   
   // Map filters answer to backend format
   const filtersValue = answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';
@@ -394,9 +394,9 @@ export const sendToZapier = async (data: {
     const leadSource = isLowes ? 'Lowes' : 'HDS';
     const giftValue = isLowes ? '$20 Lowes GC' : '$20 HD Card';
     
-    // Format tastes/odors for Zapier (convert semicolon to readable format)
-    const tastesOdorsRaw = data.survey.answers.tastes_odors || 'None';
-    const tastesOdorsForZapier = tastesOdorsRaw === 'tastes;odors' ? 'Tastes, Odors' : 'None';
+    // Format tastes/odors for Zapier (convert semicolon to comma-separated)
+    const tastesOdorsRaw = data.survey.answers.tastes_odors || 'No Problems';
+    const tastesOdorsForZapier = tastesOdorsRaw === 'Tastes;Odors' ? 'Tastes, Odors' : 'No Problems';
     
     // Format filters for Zapier
     const filtersForZapier = data.survey.answers.uses_filters === 'Yes' ? 'Drinking/Fridge Filter' : 'None';

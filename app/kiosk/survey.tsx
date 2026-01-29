@@ -231,10 +231,10 @@ export default function SurveyScreen() {
       });
     }
     
-    // Transform tastes_odors answer: Yes → "tastes;odors", No → "None"
+    // Transform tastes_odors answer: Yes → "Tastes;Odors", No → "No Problems"
     let transformedAnswer = answer;
     if (currentQuestion.id === 'tastes_odors') {
-      transformedAnswer = answer === 'Yes' ? 'tastes;odors' : 'None';
+      transformedAnswer = answer === 'Yes' ? 'Tastes;Odors' : 'No Problems';
     }
     
     const newAnswers = { ...answers, [currentQuestion.id]: transformedAnswer };
