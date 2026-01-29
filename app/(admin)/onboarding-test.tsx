@@ -74,11 +74,11 @@ export default function OnboardingTestScreen() {
   };
 
   const canProgressFromStep3 = () => {
-    return filingStatus && multipleJobs && dependents !== '' && w4Signature;
+    return filingStatus && multipleJobs && dependents !== '';
   };
 
   const canProgressFromStep4 = () => {
-    return citizenship && i9Signature;
+    return citizenship;
   };
 
   const canProgressFromStep5 = () => {
@@ -86,7 +86,7 @@ export default function OnboardingTestScreen() {
   };
 
   const canProgressFromStep6 = () => {
-    return ackFalsified && ackIpad && ackQuota && finalSignature;
+    return ackFalsified && ackIpad && ackQuota;
   };
 
   const handleNextStep = async () => {
@@ -95,11 +95,11 @@ export default function OnboardingTestScreen() {
       return;
     }
     if (currentStep === 3 && !canProgressFromStep3()) {
-      showAlert('Incomplete Form', 'Please complete W-4 form and signature');
+      showAlert('Incomplete Form', 'Please complete W-4 form');
       return;
     }
     if (currentStep === 4 && !canProgressFromStep4()) {
-      showAlert('Incomplete Form', 'Please complete I-9 form and signature');
+      showAlert('Incomplete Form', 'Please complete I-9 form');
       return;
     }
     if (currentStep === 5 && !canProgressFromStep5()) {
@@ -108,8 +108,14 @@ export default function OnboardingTestScreen() {
     }
     if (currentStep === 6) {
       if (!canProgressFromStep6()) {
-        showAlert('Incomplete', 'Please acknowledge all policies and sign');
+        showAlert('Incomplete', 'Please acknowledge all policies');
         return;
+      }
+      
+      // Auto-capture final signature before completing
+      if (signatureRef.current) {
+        signatureRef.current.readSignature();
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
       
       // Complete onboarding
@@ -122,11 +128,12 @@ export default function OnboardingTestScreen() {
       return;
     }
     
-    // Auto-save signature before moving to next step
-    if (currentStep === 3 || currentStep === 4 || currentStep === 6) {
-      signatureRef.current?.readSignature();
-      // Small delay to ensure signature is captured
-      await new Promise(resolve => setTimeout(resolve, 300));
+    // Auto-capture signature before moving to next step (W-4 and I-9)
+    if (currentStep === 3 || currentStep === 4) {
+      if (signatureRef.current) {
+        signatureRef.current.readSignature();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
     
     setCurrentStep(currentStep + 1);
@@ -392,7 +399,7 @@ export default function OnboardingTestScreen() {
 
       <View style={styles.signatureSection}>
         <Text style={styles.signatureLabel}>Your Signature</Text>
-        <Text style={styles.signatureNote}>Draw your signature below</Text>
+        <Text style={styles.signatureNote}>Draw your signature below (auto-saves when you click Next)</Text>
         <View style={styles.signatureBox}>
           <SignatureScreen
             ref={signatureRef}
@@ -409,8 +416,14 @@ export default function OnboardingTestScreen() {
             `}
           />
         </View>
+        {w4Signature && (
+          <View style={styles.signatureCaptured}>
+            <MaterialIcons name="check-circle" size={20} color={LOWES_THEME.success} />
+            <Text style={styles.signatureCapturedText}>Signature captured</Text>
+          </View>
+        )}
         <Button
-          title={w4Signature ? "✓ Signature Captured" : "Clear Signature"}
+          title="Clear Signature"
           onPress={() => {
             signatureRef.current?.clearSignature();
             setW4Signature('');
@@ -481,7 +494,7 @@ export default function OnboardingTestScreen() {
 
       <View style={styles.signatureSection}>
         <Text style={styles.signatureLabel}>Your Signature</Text>
-        <Text style={styles.signatureNote}>Draw your signature below</Text>
+        <Text style={styles.signatureNote}>Draw your signature below (auto-saves when you click Next)</Text>
         <View style={styles.signatureBox}>
           <SignatureScreen
             ref={signatureRef}
@@ -498,8 +511,14 @@ export default function OnboardingTestScreen() {
             `}
           />
         </View>
+        {i9Signature && (
+          <View style={styles.signatureCaptured}>
+            <MaterialIcons name="check-circle" size={20} color={LOWES_THEME.success} />
+            <Text style={styles.signatureCapturedText}>Signature captured</Text>
+          </View>
+        )}
         <Button
-          title={i9Signature ? "✓ Signature Captured" : "Clear Signature"}
+          title="Clear Signature"
           onPress={() => {
             signatureRef.current?.clearSignature();
             setI9Signature('');
@@ -650,8 +669,14 @@ export default function OnboardingTestScreen() {
             `}
           />
         </View>
+        {finalSignature && (
+          <View style={styles.signatureCaptured}>
+            <MaterialIcons name="check-circle" size={20} color={LOWES_THEME.success} />
+            <Text style={styles.signatureCapturedText}>Signature captured</Text>
+          </View>
+        )}
         <Button
-          title={finalSignature ? "✓ Signature Captured" : "Clear Signature"}
+          title="Clear Signature"
           onPress={() => {
             signatureRef.current?.clearSignature();
             setFinalSignature('');
@@ -1039,6 +1064,19 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
     color: LOWES_THEME.text,
+  },
+  signatureCaptured: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    padding: SPACING.sm,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+  },
+  signatureCapturedText: {
+    fontSize: FONTS.sizes.sm,
+    color: LOWES_THEME.success,
+    fontWeight: '600',
   },
   navigation: {
     flexDirection: 'row',
