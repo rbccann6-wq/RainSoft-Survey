@@ -206,6 +206,13 @@ export default function AdminDashboard() {
           description: 'Salesforce sync',
         },
         {
+          icon: 'trending-up',
+          label: 'Stats Sync',
+          route: '/(admin)/sync-stats',
+          color: '#4CAF50',
+          description: 'Sync employee stats',
+        },
+        {
           icon: 'school',
           label: 'Onboarding',
           route: '/(admin)/onboarding-manager',

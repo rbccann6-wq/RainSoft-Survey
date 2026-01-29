@@ -277,6 +277,43 @@ Deno.serve(async (req) => {
         );
       }
 
+      case 'run_report': {
+        // Run a Salesforce report and return results
+        const { reportId } = data;
+        
+        if (!reportId) {
+          throw new Error('reportId is required for run_report action');
+        }
+        
+        console.log(`📊 Running Salesforce report: ${reportId}`);
+        
+        // Run the report (this triggers execution and returns results)
+        const reportUrl = `${instanceUrl}/services/data/v57.0/analytics/reports/${reportId}`;
+        
+        const response = await fetch(reportUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Salesforce report execution failed: ${response.status} - ${errorText}`);
+        }
+
+        const reportResults = await response.json();
+        
+        console.log(`✅ Report executed successfully`);
+        console.log(`   - Rows returned: ${reportResults.factMap?.T?.rows?.length || 0}`);
+        
+        return new Response(
+          JSON.stringify({ success: true, results: reportResults }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'fetch_lead_fields': {
         // Describe Lead object to get all fields
         const describeUrl = `${instanceUrl}/services/data/v57.0/sobjects/Lead/describe`;
