@@ -37,26 +37,26 @@ Groups Appointments by Status and Owner (Employee)
 
 ### 4. Group Report Data
 - **Group Rows by**: 
-  1. First grouping: **Owner ID** (drag "Owner ID" to Outline section)
-  2. Second grouping: **Status** (drag "Status" to Outline section under Owner ID)
+  1. First grouping: **Surveyor** field (drag "Surveyor" to Outline section)
+  2. Second grouping: **Status** (drag "Status" to Outline section under Surveyor)
 
 ### 5. Add Summary Columns
 - In the **Columns** section, add:
-  - **Owner ID** (if not already there)
+  - **Surveyor** (if not already there)
   - **Status** (if not already there)
   - **Record Count** (this counts the number of Leads in each status)
 
 ### 6. Remove Unnecessary Columns
 - Remove detail columns like "Lead Name", "Email", etc.
-- Keep only: Owner ID, Status, and aggregate count
+- Keep only: Surveyor, Status, and aggregate count
 
 ### 7. Set Report Format
 - Format: **Summary** (not Tabular or Matrix)
-- This groups data by Owner ID → Status with counts
+- This groups data by Surveyor → Status with counts
 
 ### 8. Name and Save
 - **Report Name**: "Employee Survey Stats - Leads"
-- **Report Description**: "Lead status counts by employee for survey outcome tracking"
+- **Report Description**: "Lead status counts by surveyor for survey outcome tracking"
 - **Folder**: Choose "Private Reports" or create "Survey Stats" folder
 - Click **Save**
 
@@ -85,22 +85,22 @@ Groups Appointments by Status and Owner (Employee)
 
 ### 4. Group Report Data
 - **Group Rows by**:
-  1. **Owner ID** (or "Assigned To" field)
+  1. **Surveyor** field (first grouping)
   2. **Staus** field (note: might be "Status" in your org)
 
 ### 5. Add Summary Columns
 - Add:
-  - **Owner ID**
+  - **Surveyor**
   - **Staus** (or Status)
   - **Record Count**
 
 ### 6. Set Report Format
 - Format: **Summary**
-- Group by Owner ID → Status
+- Group by Surveyor → Status
 
 ### 7. Name and Save
 - **Report Name**: "Employee Survey Stats - Appointments"
-- **Report Description**: "Appointment status counts by employee for survey outcome tracking"
+- **Report Description**: "Appointment status counts by surveyor for survey outcome tracking"
 - Click **Save**
 
 ### 8. Get Report ID
@@ -121,11 +121,11 @@ Click **Add Secret** and create these two entries:
 
 **Lead Report:**
 - **Key**: `SALESFORCE_LEAD_REPORT_ID`
-- **Value**: Paste your Lead report ID (e.g., `00O5f000004xYz2EAE`)
+- **Value**: `00ORl00000AgKarMAF` (your Lead report ID)
 
 **Appointment Report:**
 - **Key**: `SALESFORCE_APPOINTMENT_REPORT_ID`  
-- **Value**: Paste your Appointment report ID (e.g., `00O5f000004xYz3FAE`)
+- **Value**: `00ORl00000AgL0fMAF` (your Appointment report ID)
 
 ### 3. Save
 - Click **Save** for each secret
@@ -169,8 +169,17 @@ Click **Add Secret** and create these two entries:
 ### Issue: "Unmapped status" warnings
 **Solution**: Go to **Admin → Survey Stats Config** and add mappings for those statuses
 
-### Issue: "No employee found for Salesforce Owner ID"
-**Solution**: Ensure employee records have their Salesforce User ID stored in `adp_employee_id` field
+### Issue: "No employee found for Surveyor"
+**Solution**: 
+1. Check the exact format of Surveyor names in Salesforce (e.g., "John Doe" vs "Doe, John")
+2. Ensure employee names in OnSpace match exactly (first name + last name)
+3. The system tries multiple formats:
+   - "First Last"
+   - "Last, First"
+   - First name only
+   - Last name only
+   - Email prefix (before @)
+4. Check employee records have correct first_name and last_name fields populated
 
 ### Issue: Report ID not working
 **Solution**: 
@@ -232,7 +241,7 @@ Enable "Subscribe" in Salesforce to email report results daily (backup monitorin
 
 ### Verify Report Structure
 Your report must have:
-1. **Grouping 1**: Owner ID
+1. **Grouping 1**: Surveyor field
 2. **Grouping 2**: Status  
 3. **Summary**: Record Count
 

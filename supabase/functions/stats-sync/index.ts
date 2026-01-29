@@ -145,19 +145,19 @@ Deno.serve(async (req) => {
         console.log(`✓ Lead report returned ${leadResults.factMap?.T?.rows?.length || 0} rows`);
 
         // Process lead report rows
-        // Expected columns: Owner ID, Status, Record Count (or similar)
+        // Expected columns: Surveyor, Status, Record Count
         if (leadResults.factMap?.T?.rows) {
           for (const row of leadResults.factMap.T.rows) {
             // Extract data from row (structure depends on your report)
-            // Typically: dataCells[0] = Owner ID, dataCells[1] = Status, dataCells[2] = Count
+            // dataCells[0] = Surveyor name, dataCells[1] = Status, dataCells[2] = Count
             const cells = row.dataCells;
             
             if (cells.length >= 3) {
-              const ownerId = String(cells[0].value || '').trim();
+              const surveyorName = String(cells[0].value || '').trim();
               const status = String(cells[1].value || '').trim();
               const count = parseInt(String(cells[2].value || '0'), 10);
 
-              if (!ownerId || !status || count === 0) continue;
+              if (!surveyorName || !status || count === 0) continue;
 
               // Find category mapping
               const mapping = leadMappings.find(m => m.salesforce_status === status);
@@ -166,11 +166,11 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Get or create employee stats entry
-              const key = `${ownerId}_${today}`;
+              // Get or create employee stats entry (using surveyor name as key for now)
+              const key = `${surveyorName}_${today}`;
               if (!employeeStatsMap.has(key)) {
                 employeeStatsMap.set(key, {
-                  employee_id: ownerId,
+                  employee_id: surveyorName, // Temporary: will be replaced with actual employee_id later
                   date: today,
                   bad_contact_count: 0,
                   dead_count: 0,
@@ -221,11 +221,11 @@ Deno.serve(async (req) => {
             const cells = row.dataCells;
             
             if (cells.length >= 3) {
-              const ownerId = String(cells[0].value || '').trim();
+              const surveyorName = String(cells[0].value || '').trim();
               const status = String(cells[1].value || '').trim();
               const count = parseInt(String(cells[2].value || '0'), 10);
 
-              if (!ownerId || !status || count === 0) continue;
+              if (!surveyorName || !status || count === 0) continue;
 
               // Find category mapping
               const mapping = appointmentMappings.find(m => m.salesforce_status === status);
@@ -234,11 +234,11 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Get or create employee stats entry
-              const key = `${ownerId}_${today}`;
+              // Get or create employee stats entry (using surveyor name as key for now)
+              const key = `${surveyorName}_${today}`;
               if (!employeeStatsMap.has(key)) {
                 employeeStatsMap.set(key, {
-                  employee_id: ownerId,
+                  employee_id: surveyorName, // Temporary: will be replaced with actual employee_id later
                   date: today,
                   bad_contact_count: 0,
                   dead_count: 0,
@@ -257,34 +257,59 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Step 5: Match Salesforce Owner IDs to employee IDs
-      console.log('🔍 Matching Salesforce Owner IDs to employees...');
+      // Step 5: Match Salesforce Surveyor names to employee IDs
+      console.log('🔍 Matching Salesforce Surveyor field to employees...');
       
-      // Get all employees with their ADP IDs (we'll use this as Salesforce ID for now)
+      // Get all employees
       const { data: employees, error: employeesError } = await supabase
         .from('employees')
-        .select('id, adp_employee_id, first_name, last_name');
+        .select('id, first_name, last_name, email');
 
       if (employeesError) {
         throw new Error(`Failed to load employees: ${employeesError.message}`);
       }
 
-      // Create mapping: Salesforce Owner ID → Employee ID
-      const ownerIdMap = new Map<string, string>();
+      // Create mapping: Surveyor name variations → Employee ID
+      // Try multiple name formats to maximize matches:
+      // - "First Last"
+      // - "Last, First"
+      // - "First"
+      // - Email prefix (before @)
+      const surveyorMap = new Map<string, string>();
       for (const emp of employees || []) {
-        if (emp.adp_employee_id) {
-          ownerIdMap.set(emp.adp_employee_id, emp.id);
-        }
+        const firstName = emp.first_name?.trim() || '';
+        const lastName = emp.last_name?.trim() || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        const reverseName = `${lastName}, ${firstName}`.trim();
+        const emailPrefix = emp.email?.split('@')[0]?.trim() || '';
+        
+        // Map all variations to the same employee ID
+        if (fullName) surveyorMap.set(fullName, emp.id);
+        if (reverseName) surveyorMap.set(reverseName, emp.id);
+        if (firstName) surveyorMap.set(firstName, emp.id);
+        if (lastName) surveyorMap.set(lastName, emp.id);
+        if (emailPrefix) surveyorMap.set(emailPrefix, emp.id);
+        
+        // Also try lowercase versions for case-insensitive matching
+        if (fullName) surveyorMap.set(fullName.toLowerCase(), emp.id);
+        if (reverseName) surveyorMap.set(reverseName.toLowerCase(), emp.id);
+        if (firstName) surveyorMap.set(firstName.toLowerCase(), emp.id);
+        if (lastName) surveyorMap.set(lastName.toLowerCase(), emp.id);
       }
 
       // Update employee stats with correct employee IDs
       const finalStats: EmployeeStats[] = [];
+      const unmatchedSurveyors = new Set<string>();
+      
       for (const [key, stats] of employeeStatsMap.entries()) {
-        const salesforceOwnerId = stats.employee_id;
-        const employeeId = ownerIdMap.get(salesforceOwnerId);
+        const surveyorName = stats.employee_id;
+        
+        // Try to find employee ID (case-sensitive first, then case-insensitive)
+        let employeeId = surveyorMap.get(surveyorName) || surveyorMap.get(surveyorName.toLowerCase());
         
         if (!employeeId) {
-          console.log(`⚠️  No employee found for Salesforce Owner ID: ${salesforceOwnerId} - skipping`);
+          unmatchedSurveyors.add(surveyorName);
+          console.log(`⚠️  No employee found for Surveyor: "${surveyorName}" - skipping`);
           continue;
         }
 
@@ -295,6 +320,10 @@ Deno.serve(async (req) => {
       }
 
       console.log(`✓ Matched ${finalStats.length} employee stat records`);
+      
+      if (unmatchedSurveyors.size > 0) {
+        console.log(`⚠️  Unmatched surveyors (${unmatchedSurveyors.size}): ${Array.from(unmatchedSurveyors).join(', ')}`);
+      }
 
       // Step 6: Upsert to employee_survey_stats table
       if (finalStats.length > 0) {
