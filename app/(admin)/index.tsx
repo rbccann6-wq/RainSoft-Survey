@@ -248,6 +248,13 @@ export default function AdminDashboard() {
           description: 'Auto push & SMS alerts',
         },
         {
+          icon: 'mail',
+          label: 'Daily Reports',
+          route: '/(admin)/report-settings',
+          color: '#00BCD4',
+          description: 'Automated email & SMS reports',
+        },
+        {
           icon: 'settings',
           label: 'Settings',
           route: '/(admin)/settings',
