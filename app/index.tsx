@@ -1,36 +1,41 @@
 // App entry point - Auto-redirect based on login status
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useApp } from '@/hooks/useApp';
 import { LOWES_THEME } from '@/constants/theme';
 
 export default function Index() {
-  const router = useRouter();
   const { currentUser } = useApp();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Small delay to allow context to initialize
+    // Wait for app context to initialize (reduced for web performance)
     const timeout = setTimeout(() => {
-      if (currentUser) {
-        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-          router.replace('/(admin)');
-        } else {
-          router.replace('/kiosk');
-        }
-      } else {
-        router.replace('/login');
-      }
-    }, 500);
+      setIsReady(true);
+    }, 200);
 
     return () => clearTimeout(timeout);
-  }, [currentUser]);
+  }, []);
 
-  return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={LOWES_THEME.primary} />
-    </View>
-  );
+  // Show loading while context initializes
+  if (!isReady) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={LOWES_THEME.primary} />
+      </View>
+    );
+  }
+
+  // Redirect based on auth state
+  if (currentUser) {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+      return <Redirect href="/(admin)" />;
+    }
+    return <Redirect href="/kiosk" />;
+  }
+
+  return <Redirect href="/login" />;
 }
 
 const styles = StyleSheet.create({
