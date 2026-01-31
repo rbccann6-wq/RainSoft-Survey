@@ -76,11 +76,7 @@ export default function LoginScreen() {
             fullWidth
           />
 
-          <View style={styles.demoInfo}>
-            <Text style={styles.demoTitle}>Demo Accounts:</Text>
-            <Text style={styles.demoText}>Admin: admin@rainsoft.com</Text>
-            <Text style={styles.demoText}>Surveyor: surveyor@rainsoft.com</Text>
-          </View>
+          {/* Demo accounts removed - using real accounts only */}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
